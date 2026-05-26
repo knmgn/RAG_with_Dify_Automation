@@ -2,12 +2,52 @@
 ## 株式会社デモ・ロジスティクス向け 社内規程ナレッジ Bot
 
 > プロジェクトコード：DEMO-RAG-001
-> 設計バージョン：v1.2
+> 設計バージョン：v1.3
 > 想定LLM：OpenAI gpt-4o-mini（コスト最適化）／本番昇格時は gpt-4o または Claude 3.5 Sonnet
 > 想定埋め込みモデル：text-embedding-3-large（dimension: 3072）
 > Rerankモデル：Cohere rerank-multilingual-v3.0
 > 想定UI：Dify標準WebApp ／ Slack ／ 社内ポータル iframe 埋め込み
 > 連携先：n8n（Self-hosted on Docker）→ Slack Bot → Google Drive（共有ドライブ）
+
+---
+
+## Targeted Use Case for Japanese SMEs (English Summary for Global Clients)
+
+> This section is intentionally written in English for international clients (e.g. Upwork buyers) who evaluate this portfolio without reading Japanese. It clarifies **why** the demo targets Japan-specific back-office pain points and how the same architecture is reusable across other linguistic and regulatory contexts.
+
+### Why this demo targets Japanese SMEs
+
+Japanese small and medium-sized enterprises (SMEs) carry an unusually heavy back-office burden compared to their Western counterparts. The dummy regulation bundled with this portfolio (`01_dummy_manual_demo_logistics.md`) is a faithful caricature of the operational reality faced by tens of thousands of Japanese SMEs in logistics, manufacturing, construction, and professional services.
+
+1. **Hyper-granular internal rules.** Expense policies routinely encode dozens of edge cases — taxi reimbursement only after 23:00, per-route last-train screenshots required as evidence, a JPY 15,000 cap with a separate "excess justification form (F-021)" requiring two-manager approval, distinct lodging caps for the 23 wards of Tokyo vs. other ordinance-designated cities, kilometer-based reimbursement for personal-car business use, and so on. These rules are rarely digitized in a searchable form; they live in 30-page PDFs on a shared drive.
+2. **Strict deadlines enforced by social cost.** Late expense submissions trigger an "incident report" (始末書 / *shimatsu-sho*) and HR performance deductions. The social cost of asking a human (the General Affairs department, *Soumu-bu*) the same question repeatedly is high, which paradoxically *suppresses* healthy clarification and increases compliance errors.
+3. **Single points of failure.** A named individual — in this demo, "Mr. Sato in General Affairs, ext. 1234" — becomes the human bottleneck for health-insurance-card reissuance, shift filings, expense-template distribution, and dozens of unrelated requests. This is the canonical Japanese SME bottleneck.
+4. **Specialized vocabulary and severe orthographic variation.** A Japanese employee asks "深夜帰りのタクシー代いくら？" (colloquial), while the policy is written as "業務終了時刻が23:00を超え" (formal). Bridging this gap requires **Hybrid Search + Rerank**: pure semantic search alone misses form identifiers (`F-021`, `DL-HR-RG-2024-007`), and pure keyword search misses the colloquial-to-formal gap.
+5. **Tool fragmentation typical of Japanese workplaces.** Files live on Google Drive or a "社内共有ドライブ" (internal shared drive), conversations happen on Slack/Teams/Chatwork, approvals run through a separate workflow tool ("Coconala-Flow" in this demo), and HR records sit in yet another system. **n8n is the glue** that turns "request → file delivery → audit log" into a single conversational action.
+
+### What this architecture solves
+
+By combining **Dify (high-precision RAG with anti-hallucination guardrails)** and **n8n (executable back-office automation)**, this demo demonstrates:
+
+- **Deflection of 60–80% of repetitive questions** away from the General Affairs bottleneck (Mr. Sato), while preserving the citation trail required for Japanese audit and labor-compliance culture.
+- **Zero-hallucination boundary.** When the policy is silent, the bot does not improvise. It returns a strict, fixed deflection message naming the responsible department and contact — matching the cultural expectation of clear accountability (責任の所在 / *sekinin no shozai*).
+- **End-to-end automation, not just Q&A.** The "give me the expense template" intent does not return a link in chat — it triggers n8n to fetch the file from Drive, resolve the user's Slack identity, post a Block Kit card with a download button, and log the request to a Google Sheet for audit. This is the difference between a chatbot and a back-office automation system.
+
+### Reusability beyond Japan
+
+The same Chatflow topology (Classifier → Hybrid Retrieval → Score Gate → Guardrailed LLM → Webhook) generalizes to:
+
+- US/EU SMEs with similarly fragmented HR policies and SOPs (PTO, expense, compliance training, OSHA filings).
+- Multi-site manufacturing firms in Southeast Asia where regulatory documents are bilingual.
+- Healthcare and legal firms where citation and refusal-to-hallucinate are non-negotiable.
+
+To localize this architecture for another region, only three layers need to change:
+
+1. **Knowledge corpus** — replace the regulation PDF.
+2. **System-prompt language and deflection contact** — substitute the responsible department / named owner.
+3. **Rerank model** — e.g. switch `cohere/rerank-multilingual-v3.0` to `cohere/rerank-english-v3.0` for English-only workloads.
+
+The Chatflow graph, the intent classifier, the n8n integration pattern, and the Slack Block Kit payload remain unchanged. **This portability is the core value proposition** we sell to clients evaluating us on Coconala (domestic Japan) and Upwork (global).
 
 ---
 

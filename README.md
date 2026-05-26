@@ -2,6 +2,33 @@
 
 ココナラ／Upwork向けポートフォリオ（見本）として、「Dify（高精度RAG）×n8n（実務自動化）」のデモ動画を撮影するための素材一式。
 
+---
+
+## Targeted Use Case for Japanese SMEs (English Summary for Global Clients)
+
+> The portfolio below is intentionally localized to **Japanese small and medium-sized enterprises (SMEs)** and their back-office (HR / expense / labor compliance) operations. This English section exists so international buyers (Upwork) can evaluate the portfolio without reading Japanese.
+
+**Problem domain — why Japanese SMEs?**
+Japanese SMEs (especially in logistics, manufacturing, construction, and professional services) operate under an unusually heavy back-office burden:
+
+- **Hyper-detailed internal rules** that no employee can memorize — e.g. taxi reimbursement only after 23:00, JPY 15,000 caps with a dedicated "excess justification form (F-021)" requiring two-manager approval, distinct lodging caps for the 23 wards of Tokyo vs. other cities, last-train screenshots as evidence.
+- **Hard deadlines enforced by social cost** — late expense submissions trigger formal incident reports (始末書 / *shimatsu-sho*) and HR performance deductions, which discourages employees from asking clarifying questions and increases compliance errors.
+- **Single-point-of-failure ownership** — one named individual in the General Affairs department (*Soumu-bu*) typically owns dozens of unrelated workflows (insurance card reissuance, shift filings, template distribution).
+- **Severe orthographic variation** — employees ask in colloquial Japanese ("深夜帰りのタクシー代いくら？") while policies are written in formal legal-style Japanese ("業務終了時刻が23:00を超え"), making naïve keyword search useless.
+- **Tool fragmentation** — files on Google Drive / shared drives, conversations on Slack / Teams / Chatwork, approvals in yet another workflow system.
+
+**What this portfolio demonstrates**
+A reusable architecture (**Dify high-precision RAG + n8n executable automation**) that:
+
+1. Deflects 60–80% of repetitive HR / expense questions away from the General Affairs bottleneck, *while preserving citation trails required for Japanese audit and labor-compliance culture*.
+2. Enforces a **zero-hallucination boundary** — when the policy is silent, the bot refuses to improvise and instead names the responsible owner (in this demo: "Mr. Sato, ext. 1234"), matching the Japanese cultural expectation of clear accountability (責任の所在 / *sekinin no shozai*).
+3. Goes beyond Q&A — the "send me the expense template" intent triggers n8n to fetch the file from Google Drive, resolve the user's Slack identity, deliver a Block Kit card with a download button, and log the transaction for audit. **Chatbot → automation system.**
+
+**Reusability beyond Japan**
+The same Chatflow topology (Classifier → Hybrid Retrieval → Score Gate → Guardrailed LLM → Webhook) ports to US/EU SMEs, multilingual manufacturing in Southeast Asia, and healthcare/legal firms. Only three layers need localization: the knowledge corpus, the system-prompt language and deflection contact, and the rerank model (e.g. `cohere/rerank-multilingual-v3.0` → `cohere/rerank-english-v3.0`). The graph topology, intent classifier, n8n integration pattern, and Slack Block Kit payload remain unchanged — and this portability is the core value proposition.
+
+---
+
 ## 成果物
 
 ### 1. ダミー社内マニュアル（PDF化用テキスト）
@@ -18,7 +45,6 @@
 
 **PDF化の手順例：**
 ```bash
-# Pandoc + wkhtmltopdf を使用する場合
 pandoc 01_dummy_manual_demo_logistics.md \
   -o 01_dummy_manual_demo_logistics.pdf \
   --pdf-engine=wkhtmltopdf \
@@ -30,6 +56,7 @@ pandoc 01_dummy_manual_demo_logistics.md \
 [`02_dify_chatflow_design.md`](./02_dify_chatflow_design.md)
 
 上記マニュアルをナレッジに食わせる Dify Bot の設計書。
+- **Targeted Use Case for Japanese SMEs**（冒頭の英文セクション — 海外クライアント向け）
 - システムプロンプト（ハルシネーション抑制ガードレール、Citation強制）
 - ハイブリッド検索（Vector + Keyword）× Rerank の設定
 - Question Classifier による Intent 検出
