@@ -238,11 +238,21 @@ Chatflow 内の「LLM」ノード（ノードID: `llm_answerer`）の **System M
 ### 3-3. Dify側 ナレッジ設定（推奨パラメータ）
 
 #### ① チャンク分割
-- **チャンクモード：階層分割（Parent-Child）**
-  - 親チャンク（Parent）: 1,200 tokens（条単位で区切る）
-  - 子チャンク（Child）: 300 tokens（embedding対象。意味の粒度を保つ）
-- セパレータ：`\n### `、`\n#### `、`\n第`（Markdown見出し・条文見出しで自然に分割）
-- オーバーラップ：50 tokens（条文の境界で文脈断絶を防ぐ）
+
+> **重要な単位の注意**：Dify UI のチャンク長入力は **`characters`（文字数）単位** です。本設計書では当初 `tokens` 表記でしたが、UIに合わせて以下では **`characters` を主、`tokens` 換算を括弧書き** で併記します。日本語＋`text-embedding-3-large`（cl100k_base トークナイザ）では概ね **1日本語文字 ≈ 1〜1.5 tokens** です。
+
+- **チャンクモード：階層分割（Parent-Child）** を選択（UI上の表示：`Parent-child`）
+  - **Parent-chunk for Context：`Paragraph`** モードを選択（`Full Doc` ではない）
+    - Delimiter：`\n### \n#### \n第`（Markdown見出し ### / #### と条文見出し「第◯条」で自然に分割）
+    - Maximum chunk length：**`1,200` characters**（≈ 1,500〜1,800 tokens 相当。規程の条単位で綺麗に収まる）
+  - **Child-chunk for Retrieval**（embedding対象。意味の粒度を司る）
+    - Delimiter：`\n`（改行）
+    - Maximum chunk length：**`250` characters**（≈ 300〜375 tokens 相当）
+      - 512 など大きめにすると複数項目が1チャンクに混ざり、表記揺れに対するヒット精度が下がる傾向。Recall@4テスト（§3-4）で90%未達なら 200 まで下げて再評価。
+- **オーバーラップ設定について**：Dify の Parent-Child モードでは **オーバーラップ設定のUIは存在しません**（General／single chunk モードのみで露出）。子チャンク間の重なりは Dify が内部管理するため、本モード使用時は**指定不要**です。
+- **Text Pre-processing Rules**
+  - ✅ **Replace consecutive spaces, newlines and tabs**：ON（推奨）
+  - ❌ **Delete all URLs and email addresses**：**必ずOFFのまま**にすること。本デモではガードレール定型文に総務部 佐藤のメールアドレス（`sato.kenichi@demo-logistics.example.co.jp`）等を含めて Citation する設計のため、ここをONにすると規程内の連絡先が削除され、「総務部の佐藤までお問い合わせください」のCitation付き突っぱね回答が成立しなくなります。
 
 #### ② インデキシング
 - **Embedding Model**：`text-embedding-3-large`（日本語性能：◎、3072次元）
