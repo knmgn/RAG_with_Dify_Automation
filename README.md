@@ -61,14 +61,40 @@ pandoc 01_dummy_manual_demo_logistics.md \
 - ハイブリッド検索（Vector + Keyword）× Rerank の設定
 - Question Classifier による Intent 検出
 - n8n Webhook 連携（経費テンプレート自動配布 → Slack DM）
+- **シンプル運用パターン（4-6）**：Google Drive の「リンクを知っている全員」共有URLを Dify が直接返す軽量構成
 - テストクエリ集、デモ動画台本、納品チェックリスト
+
+### 3. ダミー経費精算テンプレート（Excel）
+[`経費精算テンプレート_v3.xlsx`](./経費精算テンプレート_v3.xlsx) ／ [`scripts/build_expense_template.py`](./scripts/build_expense_template.py)
+
+規程 DL-HR-RG-2024-007 に準拠したダミーの Excel テンプレート。Question Classifier が「ファイル要求」を検出した際に Dify が返す、Google Drive 上の配布対象ファイル。
+
+含まれるシート：
+- **経費精算書**：申請者情報、9件のサンプル明細、SUM 数式での自動集計、仮払金控除、5者承認欄
+- **タクシー利用明細**：規程第5条準拠の乗車時刻・降車時刻・F-021 ステータス記録欄
+- **仮払い精算**：仮払金と実費の差額自動計算
+- **区分マスタ**：ドロップダウン用の13区分と勘定科目・規程参照
+- **記入要領**：提出期限・タクシー上限・領収書ルール・問い合わせ窓口
+
+#### 再生成手順
+```bash
+pip install openpyxl
+python3 scripts/build_expense_template.py
+```
+
+#### Google Drive へのアップロード手順（シンプル運用版）
+1. `経費精算テンプレート_v3.xlsx` を社内共有ドライブにアップロード
+2. 「共有」→「リンクを知っている全員」→ 権限「閲覧者」に設定
+3. コピーした URL を Dify の環境変数 `EXPENSE_TEMPLATE_URL` に登録
+4. 設計書 §4-6 の Answer ノード文言をコピペで投入
 
 ## 使い方
 
 1. `01_dummy_manual_demo_logistics.md` を PDF化してDifyのナレッジにアップロード
-2. `02_dify_chatflow_design.md` の設定値をもとに Dify Chatflow を組み立て
-3. n8n のワークフローを設計書の通り構築
-4. デモ動画台本（設計書の第6章）に沿って撮影
+2. `経費精算テンプレート_v3.xlsx` を Google Drive にアップロード（リンク共有設定）
+3. `02_dify_chatflow_design.md` の設定値をもとに Dify Chatflow を組み立て
+4. n8n のワークフローを設計書の通り構築（フル版を採用する場合）
+5. デモ動画台本（設計書の第6章）に沿って撮影
 
 ## ライセンス
 
