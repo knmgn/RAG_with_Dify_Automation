@@ -190,14 +190,16 @@ Chatflow 内の「LLM」ノード（ノードID: `llm_answerer`）の **System M
 
 ### 2-3. ノード③ Knowledge Retrieval 設定
 
+ナレッジ作成時の Retrieval Setting（§3-3 ③〜⑤）を継承するため、本ノード側では**ナレッジを選択するだけで自動適用**される。本デモでの実効値は以下の通り。
+
 | 項目 | 設定値 | 備考 |
 |---|---|---|
-| 検索モード | **Hybrid Search**（Vector + Full-Text） | 後述「3章」で詳説 |
-| Top K | 8 | 多めに取って後段でRerank |
-| Score Threshold | 0.3（粗フィルタ） | 後段で再判定するため緩めに |
-| Rerank Model | `cohere/rerank-multilingual-v3.0` | 日本語精度が高い |
-| Rerank後 Top K | 4 | プロンプトに渡す最終件数 |
-| メタデータフィルタ | `doc_type = "regulation"` | 規程文書のみ対象 |
+| 検索モード | **Hybrid Search**（Vector + Full-Text） | UIで `Hybrid Search` カードを選択 |
+| Hybrid サブモード | **Rerank Model** | `Weighted Score` ではない |
+| Rerank Model | `rerank-multilingual-v3.0` | 日本語精度が高い |
+| Top K | `4` | プロンプトに渡す最終件数 |
+| Score Threshold | `0.5`（ON） | このゲートで §2-4 の IF/ELSE ノードを実質省略可 |
+| メタデータフィルタ | `doc_type = "regulation"` | 規程文書のみ対象（複数ナレッジ運用時） |
 
 ### 2-4. ノード④ IF/ELSE 設定
 
@@ -238,23 +240,57 @@ Chatflow 内の「LLM」ノード（ノードID: `llm_answerer`）の **System M
 ### 3-3. Dify側 ナレッジ設定（推奨パラメータ）
 
 #### ① チャンク分割
-- **チャンクモード：階層分割（Parent-Child）**
-  - 親チャンク（Parent）: 1,200 tokens（条単位で区切る）
-  - 子チャンク（Child）: 300 tokens（embedding対象。意味の粒度を保つ）
-- セパレータ：`\n### `、`\n#### `、`\n第`（Markdown見出し・条文見出しで自然に分割）
-- オーバーラップ：50 tokens（条文の境界で文脈断絶を防ぐ）
+
+> **重要な単位の注意**：Dify UI のチャンク長入力は **`characters`（文字数）単位** です。本設計書では当初 `tokens` 表記でしたが、UIに合わせて以下では **`characters` を主、`tokens` 換算を括弧書き** で併記します。日本語＋`text-embedding-3-large`（cl100k_base トークナイザ）では概ね **1日本語文字 ≈ 1〜1.5 tokens** です。
+
+- **チャンクモード：階層分割（Parent-Child）** を選択（UI上の表示：`Parent-child`）
+  - **Parent-chunk for Context：`Paragraph`** モードを選択（`Full Doc` ではない）
+    - Delimiter：`\n### \n#### \n第`（Markdown見出し ### / #### と条文見出し「第◯条」で自然に分割）
+    - Maximum chunk length：**`1,200` characters**（≈ 1,500〜1,800 tokens 相当。規程の条単位で綺麗に収まる）
+  - **Child-chunk for Retrieval**（embedding対象。意味の粒度を司る）
+    - Delimiter：`\n`（改行）
+    - Maximum chunk length：**`250` characters**（≈ 300〜375 tokens 相当）
+      - 512 など大きめにすると複数項目が1チャンクに混ざり、表記揺れに対するヒット精度が下がる傾向。Recall@4テスト（§3-4）で90%未達なら 200 まで下げて再評価。
+- **オーバーラップ設定について**：Dify の Parent-Child モードでは **オーバーラップ設定のUIは存在しません**（General／single chunk モードのみで露出）。子チャンク間の重なりは Dify が内部管理するため、本モード使用時は**指定不要**です。
+- **Text Pre-processing Rules**
+  - ✅ **Replace consecutive spaces, newlines and tabs**：ON（推奨）
+  - ❌ **Delete all URLs and email addresses**：**必ずOFFのまま**にすること。本デモではガードレール定型文に総務部 佐藤のメールアドレス（`sato.kenichi@demo-logistics.example.co.jp`）等を含めて Citation する設計のため、ここをONにすると規程内の連絡先が削除され、「総務部の佐藤までお問い合わせください」のCitation付き突っぱね回答が成立しなくなります。
 
 #### ② インデキシング
 - **Embedding Model**：`text-embedding-3-large`（日本語性能：◎、3072次元）
-  - コスト重視なら `text-embedding-3-small`（1536次元）も可。精度差は規程文書ではほぼ無視できる。
-- **Index Method**：High Quality（経済モードは禁止）
-- **Search Setting**：Hybrid Search 有効化、Semantic Weight = `0.7` / Keyword Weight = `0.3`
-  - 日本語規程文書では Semantic 寄せがやや有利。固有番号検索のテストで Keyword Weight を 0.4 に上げる調整余地あり。
+  - コスト重視なら `text-embedding-3-small`（1536次元）も可。精度差は規程文書ではほぼ無視できる（コストは約 1/6.5）。
+  - ⚠️ High Qualityモードでembedding完了後はEmbedding Modelの変更不可。再構築が必要になるため**初回設定時に確定**させること。
+- **Index Method**：High Quality（経済モードは禁止／そもそもParent-Childモードでは選択不可）
 
-#### ③ Rerank
-- **モデル**：`cohere/rerank-multilingual-v3.0`（日本語サポート、トップクラス精度）
-- **代替案**：`jina-reranker-v2-base-multilingual`（OSS、Self-Host可、API課金不要）
-- 入力：Top 8、出力：Top 4
+#### ③ Retrieval Setting（検索方法）
+
+UIの `Retrieval Setting` カードから3択がある。**`Hybrid Search` を選択すること**。
+
+| 選択肢 | 採否 | 理由 |
+|---|---|---|
+| Vector Search | ❌ | 固有番号（`F-021`、`DL-HR-RG-2024-007`）やファイル名（`経費精算テンプレート_v3.xlsx`）の取りこぼし発生 |
+| Full-Text Search | ❌ | 口語表現（「深夜帰り」→「23:00を超え」）の表記揺れに弱い |
+| **Hybrid Search** | ✅ | Vector + Full-Text の並列実行で双方の弱点を相互補完 |
+
+#### ④ Hybrid Search のサブモード（Weighted Score vs Rerank Model）
+
+`Hybrid Search` を選ぶと、その内部にさらに2つのサブモードが現れる。**`Rerank Model` を選択すること**。
+
+| サブモード | 並び替えロジック | 採否 |
+|---|---|---|
+| Weighted Score | Semantic / Keyword の**固定重み**を線形結合（推奨重み: Semantic `0.7` / Keyword `0.3`） | △ Rerank API が使えない場合の代替 |
+| **Rerank Model** | Rerankモデルが**文脈を理解してクエリごとに動的に並び替え** | ✅ **本デモの推奨** |
+
+> Rerank Model モードを選ぶと、UIの `Semantic Weight` / `Keyword Weight` の入力欄は表示されない（Difyが内部処理）。設計書当初に記載していた `Semantic 0.7 / Keyword 0.3` は **Weighted Score モード選択時にのみ意味を持つ値** である点に注意。
+
+#### ⑤ Rerank モデルとパラメータ
+
+| 項目 | 設定値 |
+|---|---|
+| **モデル** | `rerank-multilingual-v3.0`（Cohere、日本語サポート） |
+| **代替案** | `jina-reranker-v2-base-multilingual`（OSS、Self-Host可、API課金不要） |
+| **Top K** | `4`（LLMに渡す最終件数） |
+| **Score Threshold** | `0.5`（ON）— このゲートでChatflow側のIF/ELSEノード（§2-4）を実質省略可能 |
 
 #### ④ メタデータ
 PDFをアップロードする際、以下のメタデータを付与する。
