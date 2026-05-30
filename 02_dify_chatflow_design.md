@@ -190,14 +190,16 @@ Chatflow 内の「LLM」ノード（ノードID: `llm_answerer`）の **System M
 
 ### 2-3. ノード③ Knowledge Retrieval 設定
 
+ナレッジ作成時の Retrieval Setting（§3-3 ③〜⑤）を継承するため、本ノード側では**ナレッジを選択するだけで自動適用**される。本デモでの実効値は以下の通り。
+
 | 項目 | 設定値 | 備考 |
 |---|---|---|
-| 検索モード | **Hybrid Search**（Vector + Full-Text） | 後述「3章」で詳説 |
-| Top K | 8 | 多めに取って後段でRerank |
-| Score Threshold | 0.3（粗フィルタ） | 後段で再判定するため緩めに |
-| Rerank Model | `cohere/rerank-multilingual-v3.0` | 日本語精度が高い |
-| Rerank後 Top K | 4 | プロンプトに渡す最終件数 |
-| メタデータフィルタ | `doc_type = "regulation"` | 規程文書のみ対象 |
+| 検索モード | **Hybrid Search**（Vector + Full-Text） | UIで `Hybrid Search` カードを選択 |
+| Hybrid サブモード | **Rerank Model** | `Weighted Score` ではない |
+| Rerank Model | `rerank-multilingual-v3.0` | 日本語精度が高い |
+| Top K | `4` | プロンプトに渡す最終件数 |
+| Score Threshold | `0.5`（ON） | このゲートで §2-4 の IF/ELSE ノードを実質省略可 |
+| メタデータフィルタ | `doc_type = "regulation"` | 規程文書のみ対象（複数ナレッジ運用時） |
 
 ### 2-4. ノード④ IF/ELSE 設定
 
@@ -256,15 +258,39 @@ Chatflow 内の「LLM」ノード（ノードID: `llm_answerer`）の **System M
 
 #### ② インデキシング
 - **Embedding Model**：`text-embedding-3-large`（日本語性能：◎、3072次元）
-  - コスト重視なら `text-embedding-3-small`（1536次元）も可。精度差は規程文書ではほぼ無視できる。
-- **Index Method**：High Quality（経済モードは禁止）
-- **Search Setting**：Hybrid Search 有効化、Semantic Weight = `0.7` / Keyword Weight = `0.3`
-  - 日本語規程文書では Semantic 寄せがやや有利。固有番号検索のテストで Keyword Weight を 0.4 に上げる調整余地あり。
+  - コスト重視なら `text-embedding-3-small`（1536次元）も可。精度差は規程文書ではほぼ無視できる（コストは約 1/6.5）。
+  - ⚠️ High Qualityモードでembedding完了後はEmbedding Modelの変更不可。再構築が必要になるため**初回設定時に確定**させること。
+- **Index Method**：High Quality（経済モードは禁止／そもそもParent-Childモードでは選択不可）
 
-#### ③ Rerank
-- **モデル**：`cohere/rerank-multilingual-v3.0`（日本語サポート、トップクラス精度）
-- **代替案**：`jina-reranker-v2-base-multilingual`（OSS、Self-Host可、API課金不要）
-- 入力：Top 8、出力：Top 4
+#### ③ Retrieval Setting（検索方法）
+
+UIの `Retrieval Setting` カードから3択がある。**`Hybrid Search` を選択すること**。
+
+| 選択肢 | 採否 | 理由 |
+|---|---|---|
+| Vector Search | ❌ | 固有番号（`F-021`、`DL-HR-RG-2024-007`）やファイル名（`経費精算テンプレート_v3.xlsx`）の取りこぼし発生 |
+| Full-Text Search | ❌ | 口語表現（「深夜帰り」→「23:00を超え」）の表記揺れに弱い |
+| **Hybrid Search** | ✅ | Vector + Full-Text の並列実行で双方の弱点を相互補完 |
+
+#### ④ Hybrid Search のサブモード（Weighted Score vs Rerank Model）
+
+`Hybrid Search` を選ぶと、その内部にさらに2つのサブモードが現れる。**`Rerank Model` を選択すること**。
+
+| サブモード | 並び替えロジック | 採否 |
+|---|---|---|
+| Weighted Score | Semantic / Keyword の**固定重み**を線形結合（推奨重み: Semantic `0.7` / Keyword `0.3`） | △ Rerank API が使えない場合の代替 |
+| **Rerank Model** | Rerankモデルが**文脈を理解してクエリごとに動的に並び替え** | ✅ **本デモの推奨** |
+
+> Rerank Model モードを選ぶと、UIの `Semantic Weight` / `Keyword Weight` の入力欄は表示されない（Difyが内部処理）。設計書当初に記載していた `Semantic 0.7 / Keyword 0.3` は **Weighted Score モード選択時にのみ意味を持つ値** である点に注意。
+
+#### ⑤ Rerank モデルとパラメータ
+
+| 項目 | 設定値 |
+|---|---|
+| **モデル** | `rerank-multilingual-v3.0`（Cohere、日本語サポート） |
+| **代替案** | `jina-reranker-v2-base-multilingual`（OSS、Self-Host可、API課金不要） |
+| **Top K** | `4`（LLMに渡す最終件数） |
+| **Score Threshold** | `0.5`（ON）— このゲートでChatflow側のIF/ELSEノード（§2-4）を実質省略可能 |
 
 #### ④ メタデータ
 PDFをアップロードする際、以下のメタデータを付与する。
