@@ -292,8 +292,28 @@ UIの `Retrieval Setting` カードから3択がある。**`Hybrid Search` を�
 | **Top K** | `4`（LLMに渡す最終件数） |
 | **Score Threshold** | `0.5`（ON）— このゲートでChatflow側のIF/ELSEノード（§2-4）を実質省略可能 |
 
-#### ④ メタデータ
-PDFをアップロードする際、以下のメタデータを付与する。
+#### ⑥ メタデータ
+
+> ⚠️ Difyのメタデータは **2段階構成** であることに注意。「フィールド定義（schema）」と「各ドキュメントへの値の割り当て」は別画面・別操作。
+
+##### Step 1：カスタムメタデータ・フィールドの定義（schema）
+
+ナレッジ画面 → 右上 `Metadata` ボタン → `+ Add Metadata` から、以下の6フィールドを **string 型** で定義する。
+
+| Field name | Type | 用途 |
+|---|---|---|
+| `doc_id` | string | 規程番号（例: `DL-HR-RG-2024-007`）／監査トレース |
+| `doc_title` | string | 規程名（人間可読） |
+| `doc_version` | string | バージョン（例: `v3`）／旧版との並走時のフィルタキー |
+| `last_revised` | string | 改訂日（`YYYY-MM-DD`）／Phase 4 自動再Embedding の差分検知 |
+| `doc_type` | string | 文書種別（`regulation` / `manual` / `faq` 等）／複数ナレッジ運用時のフィルタ |
+| `category` | string | 部門カテゴリ（`総務` / `経理` / `物流` 等） |
+
+> 💡 `last_revised` は Dify上 `time` 型でも定義可能（範囲フィルタが効く）。本デモでは設計書JSON仕様との整合性を優先し `string` で定義。複数版を期間並走させる本格運用時は `time` への変更を検討。
+
+##### Step 2：ドキュメントへの値の割り当て
+
+`Documents` タブ → 規程PDFの行 → `︙` → `Edit Metadata`（または行をクリック → `Metadata` セクション）で以下を入力：
 
 ```json
 {
@@ -305,6 +325,33 @@ PDFをアップロードする際、以下のメタデータを付与する。
   "category": "総務"
 }
 ```
+
+完了確認：Metadata画面に戻り、各フィールドが `0 Values` → **`1 Value`** に変わっていればOK。
+
+##### Step 3（推奨）：Built-in メタデータの有効化
+
+Metadata画面下部の `Built-in` トグルを **ON** にすると、以下5フィールドが**自動入力で無料取得**できる。監査ログとしても有用。
+
+| Field | Type | 内容 |
+|---|---|---|
+| `document_name` | string | ファイル名（PDFファイル名） |
+| `uploader` | string | アップロード者 |
+| `upload_date` | time | アップロード日時 |
+| `last_update_date` | time | 最終更新日時 |
+| `source` | string | ソース種別（PDF/TXT等） |
+
+##### メタデータが効くタイミング（=単一ドキュメント運用では不要）
+
+| シナリオ | メタデータ必要性 |
+|---|---|
+| 規程PDF1本のみ（本デモ撮影時） | **不要**（無くても動作に影響なし） |
+| 規程＋手順書＋FAQ など複数ドキュメント | `doc_type` でフィルタ必要 |
+| 規程の v3 と v2 を期間限定で並走 | `doc_version` + `last_revised` でフィルタ必要 |
+| 部門別Bot（総務/経理/物流の独立Bot） | `category` でフィルタ必要 |
+| Phase 4（自動再Embedding） | `last_revised` で差分検知 |
+| 監査要件（回答時の参照版を記録） | `doc_id` + `doc_version` を回答ログに残す |
+
+> Citation はメタデータではなく**規程本文ヘッダー**（"文書番号：DL-HR-RG-2024-007"）から LLM が抽出する設計のため、メタデータ未設定でも引用は機能する。
 
 ### 3-4. 動作確認用テストクエリ（10件）
 本番リリース前に以下のクエリでRecall@4を確認すること。
