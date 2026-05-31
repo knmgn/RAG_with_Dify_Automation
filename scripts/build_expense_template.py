@@ -9,6 +9,16 @@ Usage:
 
 Output:
     ./経費精算テンプレート_v3.xlsx
+
+For the §4-7 fully-local Docker setup (recommended for SME deployments),
+copy the generated file into the n8n bind-mount directory:
+
+    cp 経費精算テンプレート_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
+    xattr -c docker/n8n/templates/expense_template_v3.xlsx    # macOS only
+
+The xattr -c step is mandatory on macOS to clear Google Drive (drivefs)
+extended attributes that otherwise cause EPERM in n8n's Read/Write Files
+node. See §4-8 ③ in the design doc.
 """
 
 from __future__ import annotations

@@ -22,7 +22,8 @@ A reusable architecture (**Dify high-precision RAG + n8n executable automation**
 
 1. Deflects 60–80% of repetitive HR / expense questions away from the General Affairs bottleneck, *while preserving citation trails required for Japanese audit and labor-compliance culture*.
 2. Enforces a **zero-hallucination boundary** — when the policy is silent, the bot refuses to improvise and instead names the responsible owner (in this demo: "Mr. Sato, ext. 1234"), matching the Japanese cultural expectation of clear accountability (責任の所在 / *sekinin no shozai*).
-3. Goes beyond Q&A — the "send me the expense template" intent triggers n8n to fetch the file from Google Drive, resolve the user's Slack identity, deliver a Block Kit card with a download button, and log the transaction for audit. **Chatbot → automation system.**
+3. Goes beyond Q&A — the "send me the expense template" intent triggers n8n to fetch the file from a local share, log the request, and respond to the user with a download URL. **Chatbot → automation system.**
+4. **Ships an all-local, closed-network deployment option** (`docker/`) where every byte stays inside the customer's server. For Japanese SMEs paranoid about data leaving the building, this is decisive — see deliverable #4 below.
 
 **Reusability beyond Japan**
 The same Chatflow topology (Classifier → Hybrid Retrieval → Score Gate → Guardrailed LLM → Webhook) ports to US/EU SMEs, multilingual manufacturing in Southeast Asia, and healthcare/legal firms. Only three layers need localization: the knowledge corpus, the system-prompt language and deflection contact, and the rerank model (e.g. `cohere/rerank-multilingual-v3.0` → `cohere/rerank-english-v3.0`). The graph topology, intent classifier, n8n integration pattern, and Slack Block Kit payload remain unchanged — and this portability is the core value proposition.
@@ -60,8 +61,11 @@ pandoc 01_dummy_manual_demo_logistics.md \
 - システムプロンプト（ハルシネーション抑制ガードレール、Citation強制）
 - ハイブリッド検索（Vector + Keyword）× Rerank の設定
 - Question Classifier による Intent 検出
-- n8n Webhook 連携（経費テンプレート自動配布 → Slack DM）
-- **シンプル運用パターン（4-6）**：Google Drive の「リンクを知っている全員」共有URLを Dify が直接返す軽量構成
+- **3つのn8n連携パターン**：
+  - §4-1 フル版（Drive + Slack API連携、50名以上の組織向け）
+  - §4-6 シンプル版（Google Drive リンク共有のみ、PoC向け）
+  - **§4-7 完全ローカルDocker版（中小企業向け本命、データ外部流出ゼロ）** ← 推奨
+- §4-8 実装中に発見した運用ノウハウ4件（n8n allowlist / Webhook Respond モード / macOS xattr / RFC 5987）
 - テストクエリ集、デモ動画台本、納品チェックリスト
 
 ### 3. ダミー経費精算テンプレート（Excel）
@@ -88,13 +92,51 @@ python3 scripts/build_expense_template.py
 3. コピーした URL を Dify の環境変数 `EXPENSE_TEMPLATE_URL` に登録
 4. 設計書 §4-6 の Answer ノード文言をコピペで投入
 
+### 4. ローカルDocker環境一式（完全社内完結 PoC スタック）
+[`docker/`](./docker/) ディレクトリ
+
+**中小企業案件の本命**：Dify Self-Hosted + n8n + 共有Dockerネットワークで、データを一切外部に出さずに動作する完全ローカル構成のPoC環境。設計書 §4-7 / §4-8 の参照実装。
+
+含まれるファイル：
+- `docker/README.md` ─ `git clone` → `docker compose up -d` 一発で動く手順書
+- `docker/n8n/docker-compose.yml` ─ n8n 本体 + xlsx volume + 共有network参加済み
+- `docker/n8n/templates/.gitkeep` ─ xlsx 配置先（設計書 §4-8 ① の allowlist 制約に準拠）
+- `docker/dify/docker-compose.override.yaml` ─ Dify公式に重ねるネットワーク追加だけの差分（Dify本体は触らない）
+- `docker/test/test_webhook.sh` ─ 4段階の疎通テストスクリプト（host→n8n / Dify→n8n / Workflow1全体 / Workflow2バイナリ応答）
+
+#### クイックスタート（要約）
+```bash
+docker network create demo-rag-net
+
+# Dify Self-Hosted 起動
+git clone https://github.com/langgenius/dify.git ~/dify-local
+cp docker/dify/docker-compose.override.yaml ~/dify-local/docker/
+cd ~/dify-local/docker && cp .env.example .env && docker compose up -d
+
+# n8n 起動
+cd <この repo>/docker/n8n
+cp ../../経費精算テンプレート_v3.xlsx ./templates/expense_template_v3.xlsx
+xattr -c ./templates/expense_template_v3.xlsx   # macOS のみ
+docker compose up -d
+
+# 疎通テスト
+export N8N_WEBHOOK_TOKEN="<your token>"
+./docker/test/test_webhook.sh
+```
+
+詳細は [`docker/README.md`](./docker/README.md) を参照。
+
 ## 使い方
 
 1. `01_dummy_manual_demo_logistics.md` を PDF化してDifyのナレッジにアップロード
-2. `経費精算テンプレート_v3.xlsx` を Google Drive にアップロード（リンク共有設定）
+2. `経費精算テンプレート_v3.xlsx` を配布手段に応じて配置
+   - 完全ローカル（推奨）：`docker/n8n/templates/expense_template_v3.xlsx` に配置
+   - シンプル版：Google Drive にアップロード（リンク共有設定）
+   - フル版：Google Drive + Slack 連携の API 設定
 3. `02_dify_chatflow_design.md` の設定値をもとに Dify Chatflow を組み立て
-4. n8n のワークフローを設計書の通り構築（フル版を採用する場合）
-5. デモ動画台本（設計書の第6章）に沿って撮影
+4. n8n のワークフローを設計書 §4-7 ②（完全ローカル）or §4-2（フル版）の通り構築
+5. `docker/test/test_webhook.sh` で4段階の疎通テスト
+6. デモ動画台本（設計書の第6章）に沿って撮影
 
 ## ライセンス
 

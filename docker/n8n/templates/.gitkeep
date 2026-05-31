@@ -1,0 +1,16 @@
+# Place expense_template_v3.xlsx here.
+#
+# This directory is bind-mounted into the n8n container at
+# /home/node/.n8n-files (which is n8n's allowlisted read path).
+#
+# Setup commands from the project root:
+#
+#   cp 経費精算テンプレート_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
+#   xattr -c docker/n8n/templates/expense_template_v3.xlsx   # macOS only
+#
+# The xlsx itself is checked into the repo root and can be regenerated
+# anytime via:
+#
+#   python3 scripts/build_expense_template.py
+#
+# (See §4-8 ③ in the design doc for the macOS xattr explanation.)
