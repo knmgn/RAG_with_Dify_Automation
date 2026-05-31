@@ -1,0 +1,50 @@
+# n8n Self-Hosted with Dify shared network and templates volume
+#
+# Verified configuration from §4-7 of 02_dify_chatflow_design.md.
+#
+# Setup:
+#   1. From the docker/ directory, place the xlsx file:
+#        cp ../../経費精算テンプレート_v3.xlsx ./templates/expense_template_v3.xlsx
+#        # On macOS, strip extended attributes if file came via Google Drive sync:
+#        xattr -c ./templates/expense_template_v3.xlsx
+#   2. Ensure the shared network exists (created once by ../README.md):
+#        docker network create demo-rag-net
+#   3. From this directory:
+#        docker compose up -d
+#
+# Notes:
+#   - The bind mount destination /home/node/.n8n-files is intentional:
+#     n8n's Read/Write Files from Disk node enforces an allowlist on
+#     read paths, and /home/node/.n8n-files is the default allowed path.
+#     See §4-8 ① in the design doc for details.
+#   - n8n_data is a named volume, so workflows / credentials persist
+#     across docker compose down/up cycles.
+
+version: '3.8'
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n_local
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./templates:/home/node/.n8n-files
+    environment:
+      - N8N_SECURE_COOKIE=false
+      # Set N8N_HOST and WEBHOOK_URL for production deployments behind
+      # a reverse proxy. For local dev these defaults are fine.
+      # - N8N_HOST=n8n.example.co.jp
+      # - WEBHOOK_URL=https://n8n.example.co.jp/
+    restart: always
+    networks:
+      - default
+      - demo-rag-net
+
+volumes:
+  n8n_data:
+
+networks:
+  demo-rag-net:
+    external: true

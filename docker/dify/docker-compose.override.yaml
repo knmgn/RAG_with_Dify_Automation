@@ -1,0 +1,52 @@
+# Dify Self-Hosted compose override for joining the demo-rag-net network
+#
+# This override file lets the Dify api / worker / nginx services reach the
+# n8n container at http://n8n_local:5678/... over the shared external
+# network demo-rag-net, WITHOUT modifying Dify's official docker-compose.yaml.
+#
+# Why use override instead of editing the main file?
+#   - Survives `git pull` of the upstream Dify repo
+#   - Standard Docker pattern (compose auto-merges *.override.yaml)
+#   - Easier to review the diff vs Dify defaults
+#
+# Setup:
+#   1. Clone Dify locally:
+#        git clone https://github.com/langgenius/dify.git ~/dify-local
+#   2. Copy this override file into Dify's docker directory:
+#        cp docker/dify/docker-compose.override.yaml ~/dify-local/docker/
+#   3. Make sure the shared network exists:
+#        docker network create demo-rag-net
+#   4. Boot Dify:
+#        cd ~/dify-local/docker
+#        cp .env.example .env
+#        docker compose up -d
+#
+# Verification (from ../test/test_webhook.sh):
+#   docker exec docker-api-1 curl -s http://n8n_local:5678/healthz
+#   # → {"status":"ok"}
+#
+# Notes:
+#   - We attach demo-rag-net to api and worker because Dify Chatflow's
+#     HTTP Request node executes on the worker (and falls back to api
+#     for synchronous flows). Adding both is the safe default.
+#   - We do NOT attach demo-rag-net to nginx because nginx only handles
+#     inbound browser traffic on port 80, not outbound to n8n.
+#   - The actual demo-rag-net definition under the top-level networks:
+#     block is what allows compose to recognize it as external.
+
+services:
+  api:
+    networks:
+      - ssrf_proxy_network
+      - default
+      - demo-rag-net
+
+  worker:
+    networks:
+      - ssrf_proxy_network
+      - default
+      - demo-rag-net
+
+networks:
+  demo-rag-net:
+    external: true
