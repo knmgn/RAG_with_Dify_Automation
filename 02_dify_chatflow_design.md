@@ -2,12 +2,12 @@
 ## 株式会社デモ・ロジスティクス向け 社内規程ナレッジ Bot
 
 > プロジェクトコード：DEMO-RAG-001
-> 設計バージョン：v1.3
+> 設計バージョン：v1.4
 > 想定LLM：OpenAI gpt-4o-mini（コスト最適化）／本番昇格時は gpt-4o または Claude 3.5 Sonnet
 > 想定埋め込みモデル：text-embedding-3-large（dimension: 3072）
 > Rerankモデル：Cohere rerank-multilingual-v3.0
 > 想定UI：Dify標準WebApp ／ Slack ／ 社内ポータル iframe 埋め込み
-> 連携先：n8n（Self-hosted on Docker）→ Slack Bot → Google Drive（共有ドライブ）
+> 連携先：n8n（Self-hosted on Docker）→ Slack Bot or 内部ファイルサーバー（§4-7参照）
 
 ---
 
@@ -571,6 +571,282 @@ n8n / Slack / 個別ユーザー解決まで構築する前段階として、も
 
 ---
 
+### 4-7. 完全ローカルDocker構成（中小企業案件向け本命パターン）
+
+§4-1〜4-5（クラウドAPI連携フル版）と§4-6（Drive直URL返答シンプル版）の中間に位置する、**「すべて社内サーバー内で完結する」**第3のパターン。中小企業の経営者に「データは外に出ません」と言い切れるため、本デモのデフォルトとして推奨する。
+
+#### ① アーキテクチャ全体像
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│  社内サーバー / 開発Mac（Docker host）                          │
+│                                                                  │
+│  共有ネットワーク: demo-rag-net (external bridge)                │
+│  ┌─────────────────────────┬──────────────────────────────────┐ │
+│  │  [Dify Self-Hosted]      │  [n8n Self-Hosted]                │ │
+│  │  - api / worker / web    │  - n8n_local container            │ │
+│  │  - postgres / redis      │  - Workflow 1: Intent Dispatcher  │ │
+│  │  - weaviate / sandbox    │  - Workflow 2: File Server        │ │
+│  │  - nginx (port 80)       │  - port 5678                       │ │
+│  │                          │  - templates/ (bind mount)         │ │
+│  └─────────────────────────┴──────────────────────────────────┘ │
+│           ↑ Browser:80              ↑ Browser:5678              │
+│           │                         │ (file download click)     │
+└───────────┼─────────────────────────┼──────────────────────────┘
+            │                         │
+       [Employee's Browser]      [Employee's Browser]
+
+  Dify→n8n 内部呼び出し: http://n8n_local:5678/webhook/<UUID>  (Docker内DNS)
+  Browser→ファイル取得: http://localhost:5678/webhook/files/expense-v3 (host port)
+```
+
+> 💡 **「URLの二刀流」がポイント**：Difyから見た n8n は内部DNS名 `n8n_local`、ブラウザから見た n8n は `localhost`。Difyが返すJSONの `download_url` は**ブラウザがアクセスする URL**（`localhost:5678`）を入れること。`n8n_local:5678` を入れるとブラウザでは解決できず "ERR_NAME_NOT_RESOLVED" になる。
+
+#### ② n8n ワークフロー（2本構成）
+
+##### Workflow 1：Intent Dispatcher（POST受け）
+
+```
+[Webhook] → [Edit Fields] → [Switch] ─Output 0 (expense)─→ [Respond to Webhook (JSON)]
+                                      ├─Output 1 (taxi)──→ [Respond to Webhook (501)]
+                                      └─Fallback───────────→ [Respond to Webhook (400)]
+```
+
+| ノード | 設定 |
+|---|---|
+| Webhook | Method: POST / Path: 推測困難なUUID / Auth: Header Auth (`X-Auth-Token`) / Respond: **`Using 'Respond to Webhook' Node`** ⚠️必須 |
+| Edit Fields | Manual Mapping で `user_id={{$json.body.user_id}}`, `intent={{$json.body.intent}}`, `template_key={{$json.body.metadata.template_key}}` |
+| Switch | Mode: Rules / Output 0 = `intent equals "request_expense_template"` / Output 1 = `intent equals "request_taxi_form"` / Fallback Output = **Extra Output** ⚠️ |
+| Respond to Webhook (Output 0) | JSON, Code 200, Body は §4-7 ④の通り（`download_url` 含む） |
+| Respond to Webhook (Fallback) | JSON, Code 400, "Unknown intent" メッセージ |
+
+##### Workflow 2：File Server（GET受け、バイナリ応答）
+
+```
+[Webhook (GET)] ─→ [Read/Write Files from Disk] ─→ [Respond to Webhook (Binary)]
+```
+
+| ノード | 設定 |
+|---|---|
+| Webhook | Method: GET / Path: `files/expense-v3` / Auth: None（パス自体がトークン代わり）/ Respond: **`Using 'Respond to Webhook' Node`** |
+| Read/Write Files from Disk | Operation: `Read File(s) From Disk` / File Selector: **`/home/node/.n8n-files/expense_template_v3.xlsx`** ⚠️allowlist制約（§4-8参照） |
+| Respond to Webhook | Respond With: **`Binary`** / Input Field Name: `data` / Headers: `Content-Type` + `Content-Disposition`（RFC 5987形式、§4-8参照） |
+
+#### ③ Dify HTTP Request ノードの設定（Self-Hosted版）
+
+| 項目 | 設定値 |
+|---|---|
+| メソッド | POST |
+| **URL** | **`http://n8n_local:5678/webhook/<Workflow1のUUID>`**（Docker内部DNS名） |
+| ヘッダー | `Content-Type: application/json` |
+| ヘッダー | `X-Auth-Token: {{#env.N8N_WEBHOOK_TOKEN#}}` |
+| ボディ（JSON） | §4-1と同じ |
+
+> ⚠️ Cloud版Difyから叩く場合は `http://n8n_local:...` ではなく、ngrok等で公開した `https://xxxx.ngrok-free.app/webhook/<UUID>` を使う必要がある（§4-1のクラウド前提URL）。本構成は**Self-Hosted前提**。
+
+#### ④ Workflow 1 Output 0 が返す JSON（コピペ用）
+
+```json
+{
+  "status": "success",
+  "intent": "request_expense_template",
+  "filename": "経費精算テンプレート_v3.xlsx",
+  "download_url": "http://localhost:5678/webhook/files/expense-v3",
+  "message": "経費精算テンプレートをご用意しました。下記URLからダウンロードしてください。",
+  "regulation_ref": "DL-HR-RG-2024-007 第8条・第9条",
+  "deadline": "毎月25日17:00必着",
+  "macro_warning": "マクロを必ず有効化してください（規程第9条第4項）"
+}
+```
+
+#### ⑤ Dify Answer ノードでの回答整形
+
+n8n から返ってきた JSON を使って、Difyの Answer ノードでユーザー向け文章を整形する：
+
+```text
+{{#http_request.response.message#}}
+
+📎 **{{#http_request.response.filename#}}**
+{{#http_request.response.download_url#}}
+
+【ご注意】
+- 提出期限：{{#http_request.response.deadline#}}
+- {{#http_request.response.macro_warning#}}
+
+【引用元】
+規程：{{#http_request.response.regulation_ref#}}
+窓口：総務部 佐藤（内線1234）／ 経理部 鈴木（内線1456）
+```
+
+#### ⑥ 共有ネットワーク戦略：external network 方式
+
+n8n と Dify の `docker-compose.yml` は**それぞれ独立管理**しつつ、**外部ネットワーク `demo-rag-net` を共有**することで通信を確立する。これは Docker の標準パターンで、各stackが独立して up/down できる利点がある。
+
+##### セットアップ手順（要約）
+
+```bash
+# 1. 共有ネットワーク作成（一度だけ）
+docker network create demo-rag-net
+
+# 2. n8n の docker-compose.yml に network 設定追加（services + networks セクション）
+# 3. Dify の docker-compose.yaml の api / worker / nginx に networks 追加
+#    （あるいは override file で重ねる、本リポジトリの docker/dify/docker-compose.override.yaml 参照）
+
+# 4. 両方再起動
+cd ~/n8n-local && docker compose down && docker compose up -d
+cd ~/dify-local/docker && docker compose down && docker compose up -d
+
+# 5. 疎通確認（curl で）
+docker exec docker-api-1 curl -s http://n8n_local:5678/healthz
+# → {"status":"ok"} が返れば成功
+```
+
+具体的な YAML 編集内容と完成形は本リポジトリの `docker/` ディレクトリを参照。
+
+#### ⑦ vs §4-1 / §4-6 比較
+
+| 観点 | §4-1 フル版（Drive+Slack API連携） | §4-6 Drive URL直返し | **§4-7 完全ローカル** |
+|---|---|---|---|
+| 外部API依存 | Google Drive API + Slack API | Google Drive のみ | **なし（完全閉域）** |
+| データの外部流出懸念 | あり（ファイル本体がGoogleに乗る） | あり | **なし** |
+| インストール工数 | 高（GCP / Slack App 設定要） | 低 | 中（docker-compose編集要） |
+| クライアント説得力（中小企業） | △（経営者が懸念） | ○ | **◎（社内完結を視覚化できる）** |
+| 監査ログ | n8n→Sheets で構造化 | Difyログのみ | n8nログ＋オプションで内部DBへ |
+| 推奨ユースケース | 50名以上・既にSlack/Drive運用 | PoC・予算制約 | **中小企業の本番納品** |
+
+#### ⑧ 「URLの二刀流」が刺さるデモ動画台詞
+
+```
+「ご注目ください。この経費精算テンプレートのダウンロードURL、
+ よく見ると "localhost" になっています。
+ つまり、この処理は一度もインターネットに出ていません。
+ ファイルも、Botの判断ロジックも、すべて貴社サーバー内で完結しています」
+```
+
+→ 経営者向けプレゼンで「データは外に出ない」を視覚的に証明する瞬間。
+
+---
+
+### 4-8. 実装中に発見した運用ノウハウ集（実機検証済み）
+
+§4-7 の構成を実際にmacOS開発環境で構築した際に遭遇した、**ドキュメント・公式情報からは絶対に分からない4つのハマりポイント**を記録する。本番納品時のクライアント環境（Linux）でも一部は再発するため、PoCで先に潰しておく価値がある。
+
+#### ① n8n のファイル配置パスは `/home/node/.n8n-files/` 配下必須
+
+n8n の `Read/Write Files from Disk` ノードは、デフォルトで**特定のパス配下しかアクセスできない**サンドボックス制約がある。
+
+| 症状 | エラーメッセージ |
+|---|---|
+| 任意のパス（例：`/home/node/files/`）を指定 | `Access to the file is not allowed. Allowed paths: /home/node/.n8n-files` |
+
+**対処**：
+- bind mount 先を **`/home/node/.n8n-files`** に揃える（推奨）
+- どうしても他のパスを使いたい場合は環境変数 `N8N_RESTRICT_FILE_ACCESS_TO=/home/node/.n8n-files,/home/node/files` で許可リストを拡張
+
+```yaml
+# docker-compose.yml
+services:
+  n8n:
+    volumes:
+      - ./templates:/home/node/.n8n-files    # ✅ 推奨パス
+```
+
+#### ② Webhook ノードの Respond モードは `Using 'Respond to Webhook' Node` 必須
+
+カスタムJSON応答やバイナリ応答を返したい場合、**Webhookノードの `Respond` 設定をデフォルトの `Immediately` から変更必須**。これを忘れると n8n が以下のバリデーションエラーを出す：
+
+> `Unused Respond to Webhook node found in the workflow`
+
+意味：「Respond to Webhook ノードがワークフロー内にあるのに、Webhookは即時応答モードなので絶対に到達しない＝設定矛盾」
+
+**対処**：
+1. Webhookノードのパラメータパネルを開く
+2. `Respond` ドロップダウンを **`Using 'Respond to Webhook' Node`** に変更
+3. 加えて、Switch等の分岐がある場合は**全てのアウトプット経路に Respond to Webhook ノードを配置**する（Fallback含む）
+
+```
+[Switch] ─ Output 0 ─→ [Respond to Webhook (success 200)]
+        ├─ Output 1 ─→ [Respond to Webhook (501)]
+        └─ Fallback ─→ [Respond to Webhook (400)]
+```
+
+#### ③ macOS開発環境では Google Drive 同期ファイルの拡張属性除去が必須
+
+クライアントから「規程PDFはGoogle Driveに置いてあるんでこれ使ってください」と渡されたファイルを Mac の Docker bind mount で使おうとすると、**`EPERM: operation not permitted`** で読み込めない。
+
+##### 原因
+Google Drive (drivefs) で同期されているファイルは、macOS の拡張属性として独自IDが付与される：
+
+```bash
+$ xattr -l 経費精算テンプレート_v3.xlsx
+com.apple.quarantine: ...
+com.google.drivefs.item-id#S: 1u0IuXsFRaDlb9CvKmlUvWcClvXEBH7Sf  ← これが主犯
+com.apple.provenance: ...
+```
+
+`com.google.drivefs.item-id` が macOS の VFS 層で独自の権限制御を入れており、Docker Desktop の bind mount を経由してコンテナ内に「特殊管理下のファイル」として伝播され、Node.js の `lstat` システムコールで EPERM が発生する。
+
+##### 対処
+ファイルを bind mount 配下に置く前に、すべての拡張属性を剥がす：
+
+```bash
+xattr -c <ファイルパス>
+```
+
+確認：
+```bash
+xattr -l <ファイルパス>   # 何も出ない（または com.apple.macl のみ）が正常
+ls -la <ファイルパス>      # 末尾の @ マークが消えている
+```
+
+> 💡 `com.apple.macl` は macOS が自動付与するセキュリティ属性で、`xattr -c` でも消えない。これは **Docker bind mount に影響しない**ので無視してよい。
+
+##### 本番納品時の注意
+
+Linux サーバー環境（クライアントの本番社内サーバー）ではこの問題は発生しない（拡張属性自体が macOS 固有）。**開発・PoC環境（Mac）固有の問題**として認識し、PoC段階で潰しておく。
+
+#### ④ Content-Disposition ヘッダの RFC 5987 形式（日本語ファイル名対応）
+
+Workflow 2（File Server）の `Respond to Webhook` ノードでバイナリ応答する際、ファイル名を**日本語のまま**ダウンロード保存させたい場合、`Content-Disposition` ヘッダーは **2形式併記**が必要。
+
+##### 設定値
+
+```text
+Content-Disposition: attachment; filename="expense_template_v3.xlsx"; filename*=UTF-8''%E7%B5%8C%E8%B2%BB%E7%B2%BE%E7%AE%97%E3%83%86%E3%83%B3%E3%83%97%E3%83%AC%E3%83%BC%E3%83%88_v3.xlsx
+```
+
+| パート | 役割 | クライアント対応 |
+|---|---|---|
+| `filename="expense_template_v3.xlsx"` | ASCII fallback | curl 8.x（macOS）など、RFC 5987非対応の古いクライアント |
+| `filename*=UTF-8''<percent-encoded>` | RFC 5987 標準 | Chrome / Safari / Firefox / Edge **全ブラウザ対応** |
+
+##### 動作の違い
+
+| クライアント | 保存されるファイル名 |
+|---|---|
+| ブラウザ全般（Chrome等） | `経費精算テンプレート_v3.xlsx`（日本語） |
+| `curl -OJ`（macOS curl 8.x） | `expense_template_v3.xlsx`（ASCIIフォールバック） |
+
+→ **エンドユーザーはブラウザでクリックする**ので、本番では日本語ファイル名で保存される。curlでASCIIになるのはコマンドライン特有のクセであって、サーバー側の問題ではない。
+
+##### URLエンコード生成
+
+「経費精算テンプレート_v3.xlsx」のRFC 5987 percent-encodedは：
+
+```
+%E7%B5%8C%E8%B2%BB%E7%B2%BE%E7%AE%97%E3%83%86%E3%83%B3%E3%83%97%E3%83%AC%E3%83%BC%E3%83%88_v3.xlsx
+```
+
+別ファイル名で運用する場合は Python で生成可能：
+
+```python
+from urllib.parse import quote
+quote("経費精算テンプレート_v3.xlsx")
+# → '%E7%B5%8C%E8%B2%BB%E7%B2%BE%E7%AE%97%E3%83%86%E3%83%B3%E3%83%97%E3%83%AC%E3%83%BC%E3%83%88_v3.xlsx'
+```
+
+---
+
 ## 5. 拡張ロードマップ（クライアントへの提案フック）
 
 | 段階 | 拡張内容 | 工数感（技術的観点） |
@@ -599,28 +875,43 @@ n8n / Slack / 個別ユーザー解決まで構築する前段階として、も
 - Bot応答：「規程内に記載がありません。総務部 佐藤までお問い合わせください」と突っぱね
 - → 「嘘をつかない」を強調
 
-### Scene 4（01:30-02:30）n8n連携デモ
+### Scene 4（01:30-02:30）n8n連携デモ（§4-7 完全ローカル構成版）
 - ユーザー入力：「経費精算のフォーマットちょうだい」
-- Dify → n8n Webhook 発火
-- Slackにダウンロードリンクが即座にポン！と届く様子（画面分割）
+- Dify → n8n Webhook 発火（Dockerネットワーク内部通信）
+- 画面分割で右側にn8nのExecutionsログがリアルタイムで流れる絵
+- Difyのチャットに「下記URLからダウンロードしてください: http://localhost:5678/webhook/files/expense-v3」と表示
+- ナレーション：「**ご注目ください、URLが `localhost` です。データは一度もインターネットに出ていません**」
+- ユーザーがクリック → Excelがダウンロード → 5シート構成のテンプレートが開く
 
 ### Scene 5（02:30-03:00）クロージング
-- 「Dify × n8n で、社内問い合わせの 70%自動化。御社にも導入しませんか？」
+- 「Dify × n8n で、社内問い合わせの 70%自動化。**しかも貴社サーバー内で完結します**」
 - CTA：ココナラ / Upwork のリンク
 
 ---
 
 ## 7. 納品物チェックリスト（クライアント引渡し時）
 
+### 共通（全構成）
 - [ ] Dify Chatflow DSL（YAMLエクスポート）
 - [ ] ナレッジ用 PDF（本デモでは規程PDF）
-- [ ] n8n ワークフロー（JSONエクスポート）
+- [ ] n8n ワークフロー（JSONエクスポート、Workflow 1 / Workflow 2 両方）
 - [ ] 環境変数一覧（`.env.example`）
-- [ ] Slack App マニフェスト（YAML）
-- [ ] Google Drive サービスアカウント JSON（クライアント取得分）
-- [ ] 運用マニュアル（規程改訂時の再Embedding手順）
+- [ ] 運用マニュアル（規程改訂時の再Embedding手順、xlsxファイル更新手順）
 - [ ] テストクエリ集とRecall@4測定結果
 - [ ] Postman / curl サンプルコレクション
+
+### §4-7 完全ローカル構成（中小企業向け本命）
+- [ ] `docker/n8n/docker-compose.yml`（templates volume + allowlist パス + 共有 network 参加済み）
+- [ ] `docker/dify/docker-compose.override.yaml`（Dify公式に重ねる差分）
+- [ ] `docker/templates/expense_template_v3.xlsx`（拡張属性除去済み）
+- [ ] `docker/test/test_webhook.sh`（curl疎通テスト集）
+- [ ] `docker/README.md`（`git clone` → `docker compose up -d` 一発で動く手順書）
+- [ ] **§4-8 運用ノウハウ**（n8n allowlist / Webhook Respond モード / macOS xattr / RFC 5987）の説明書
+
+### §4-1 / §4-6（クラウドAPI連携版）採用時の追加納品物
+- [ ] Slack App マニフェスト（YAML）
+- [ ] Google Drive サービスアカウント JSON（クライアント取得分）
+- [ ] ngrok / Cloudflare Tunnel の構成手順（Dify Cloud + n8n ローカル時）
 
 ---
 
