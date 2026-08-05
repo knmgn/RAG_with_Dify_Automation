@@ -1,3 +1,0 @@
-creation_rules:
-  - path_regex: '\.env$|\.env\..*$|.*\.env$'
-    age: age1ここに公開鍵
