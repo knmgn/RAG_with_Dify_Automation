@@ -1,0 +1,12 @@
+# Dify 本体を改変せず、demo-rag-net への接続だけを追加する
+services:
+  api:
+    networks:
+      - demo-rag-net
+  worker:
+    networks:
+      - demo-rag-net
+
+networks:
+  demo-rag-net:
+    external: true
