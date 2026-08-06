@@ -1,0 +1,11 @@
+# Local secrets for the provisioning scripts (never commit)
+scripts/.dify_admin.env
+scripts/.provision_state.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# macOS
+.DS_Store
