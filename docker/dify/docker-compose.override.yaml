@@ -29,6 +29,14 @@
 #   - We attach demo-rag-net to api and worker because Dify Chatflow's
 #     HTTP Request node executes on the worker (and falls back to api
 #     for synchronous flows). Adding both is the safe default.
+#   - ssrf_proxy MUST be on the network too. This is the non-obvious one.
+#     Dify does not let the HTTP Request node open sockets directly; it sends
+#     every outbound call through the squid proxy named by SSRF_PROXY_HTTP_URL
+#     (http://ssrf_proxy:3128) as an anti-SSRF measure. So the container that
+#     actually has to resolve `n8n_local` is squid, not api/worker. Attach only
+#     api and worker and `docker exec docker-api-1 curl http://n8n_local:5678`
+#     succeeds — which makes it look wired up correctly — while the Chatflow
+#     still dies with "Reached maximum retries for URL http://n8n_local:5678/...".
 #   - We do NOT attach demo-rag-net to nginx because nginx only handles
 #     inbound browser traffic on port 80, not outbound to n8n.
 #   - The actual demo-rag-net definition under the top-level networks:
@@ -46,6 +54,21 @@ services:
       - ssrf_proxy_network
       - default
       - demo-rag-net
+
+  ssrf_proxy:
+    networks:
+      - ssrf_proxy_network
+      - default
+      - demo-rag-net
+    environment:
+      # Being on the network is necessary but not sufficient: squid's own ACLs
+      # then deny the request with `http_access deny to_private_networks`, and
+      # Dify surfaces that 403 as "Access to '...' was blocked by SSRF
+      # protection". Dify provides this env var as the supported escape hatch —
+      # it is expanded into an `acl ... dstdomain` allow rule ahead of the deny.
+      # We allow exactly the one hostname rather than a whole subnet, so the
+      # SSRF protection keeps doing its job for every other destination.
+      SSRF_PROXY_ALLOW_PRIVATE_DOMAINS: n8n_local
 
 networks:
   demo-rag-net:

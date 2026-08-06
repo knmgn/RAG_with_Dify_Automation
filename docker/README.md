@@ -77,7 +77,28 @@ cd ~/dify-local/docker
 cp .env.example .env
 ```
 
+> ⚠️ **Dify のクローンは1箇所だけにすること。** compose のプロジェクト名は
+> カレントディレクトリ名から決まり、Dify は必ず `docker/` 配下で操作するため、
+> **どこにクローンしてもプロジェクト名は `docker`** になります。
+> 2箇所にクローンすると、どちらから `docker compose up -d` しても同じコンテナ群を
+> 操作する一方で、読み込まれる compose ファイル・`.env`・テンプレートは
+> 叩いたディレクトリ側のものになります。片方で直した設定が、もう片方から
+> `up -d` した瞬間に元に戻ります（設計書 §4-8 ⑫）。
+>
+> 現在どこから起動されているかの確認：
+> ```bash
+> docker inspect docker-api-1 \
+>   --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'
+> ```
+> PostgreSQL と Weaviate のデータは bind mount でこのディレクトリ配下に置かれます。
+
 > ⚠️ `docker-compose.override.yaml` は Docker Compose が自動で本体の YAML に重ねて読み込みます（手動マージ不要）。
+>
+> このoverrideは `api` / `worker` に加えて **`ssrf_proxy` にも** `demo-rag-net` を追加し、
+> さらに `SSRF_PROXY_ALLOW_PRIVATE_DOMAINS: n8n_local` を設定します。
+> Dify は HTTP Request ノードの通信を squid（ssrf_proxy）経由で送出するため、
+> この2つが揃っていないと Chatflow から n8n に到達できません。
+> 見落とすと「疎通テストは通るのに Chatflow だけ動かない」という状態になります（設計書 §4-8 ⑩）。
 
 ### Step 3：xlsx テンプレートを配置
 
@@ -122,9 +143,40 @@ cd <この repo>/docker/n8n && docker compose ps
 | Dify | <http://localhost/install> | 初回はadminアカウント作成 |
 | n8n | <http://localhost:5678> | ワークフロー編集・モニタリング |
 
-### Step 7：n8n ワークフローのインポート（後日）
+### Step 7：n8n ワークフローのインポート
 
-n8n UIで以下の2ワークフローを設計書 §4-7 ② の構成に沿って作成します。設計書に沿って手で組むか、n8nエクスポートJSONがある場合はインポートします（本リポジトリでは手順を文書化、JSONエクスポートは§7チェックリストの納品物として用意する想定）。
+エクスポート済みの JSON を `docker/n8n/workflows/` に同梱しています。
+
+| ファイル | 内容 |
+|---|---|
+| `workflow_1_intent_dispatcher.json` | POST受け → Switch → JSON応答（`download_url` を返す） |
+| `workflow_2_file_server.json` | GET受け → ファイル読込 → バイナリ応答（xlsx） |
+
+n8n UI（<http://localhost:5678>）の右上メニュー → **Import from File** で読み込みます。
+CLI からでも可能です：
+
+```bash
+docker cp docker/n8n/workflows/workflow_1_intent_dispatcher.json n8n_local:/tmp/
+docker exec n8n_local n8n import:workflow --input=/tmp/workflow_1_intent_dispatcher.json
+```
+
+インポート後に必要な作業は2つです。
+
+1. **Header Auth Credential の作成と再リンク**
+   JSON には認証情報の**参照のみ**が含まれ、トークン本体は含まれません（当然です）。
+   Workflow 1 の Webhook ノードを開き、Credential を作り直してください。
+   - Credential 種別：`Header Auth`
+   - **`Name` 欄にはヘッダー名 `X-Auth-Token` を入れます**（Credential の管理名ではありません。
+     ここを間違えると `Authorization data is wrong!` になります。§4-8 ①の隣の罠）
+   - `Value` 欄に共有シークレット（任意のランダム文字列）
+   - 同じ値を Dify 側の環境変数 `N8N_WEBHOOK_TOKEN` にも設定します
+     （`scripts/.dify_admin.env` に書いて `provision_chatflow.py` を流すのが確実）
+
+2. **両ワークフローを Active にする**
+
+> 💡 自分の環境から書き出し直す場合は `python3 scripts/export_n8n_workflows.py` を使ってください。
+> `n8n export:workflow` の生出力には `shared` ブロックに**所有者のメールアドレス**が
+> 含まれるため、そのままコミットできません。このスクリプトが除去します。
 
 ### Step 8：疎通テスト
 
@@ -173,6 +225,10 @@ n8nがDifyに返す `download_url` フィールドには **必ず `localhost:567
 | `docker compose up` でメモリエラー | Docker Desktop → Settings → Resources → Memory を 8GB 以上に |
 | Difyの `/install` が表示されない | `docker compose ps` で nginx と api が healthy か確認 |
 | 疎通テスト Test 2 で connection refused | `docker network inspect demo-rag-net` で両コンテナが参加しているか確認 |
+| **疎通テストは全部PASSするのに Chatflow だけ `Reached maximum retries for URL http://n8n_local:5678/...`** | **`ssrf_proxy` が `demo-rag-net` に参加していない。** Dify の HTTP Request は squid 経由で送出されるため、名前解決するのは api ではなく squid。override 適用後 `docker compose up -d ssrf_proxy` |
+| **`Access to '...' was blocked by SSRF protection`** | squid の ACL が private 宛先を拒否している。override の `SSRF_PROXY_ALLOW_PRIVATE_DOMAINS: n8n_local` が効いているか確認：`docker exec docker-ssrf_proxy-1 cat /etc/squid/dify_allow_private.conf` |
+| **Bot が毎回「規程に記載が見当たりません」と返す** | ①ナレッジ検索が0件（Rerank APIのレート超過など）②LLMノードのコンテキスト変数が `{{#context#}}` でない。設計書 §4-8 ⑦ ⑧ |
+| **ファイル要求の回答が空文字で返る** | HTTP Request の `body` は文字列なので `body.message` では参照不可。JSONパース用の Code ノードが必要。設計書 §4-8 ⑨ |
 | n8n Read/Write Files で EPERM | xlsxの拡張属性を `xattr -c` で除去（macOSのみ） |
 | n8n Read/Write Files で Allowed paths エラー | ファイル配置先が `/home/node/.n8n-files` 配下か確認 |
 | Webhook で `Unused Respond to Webhook node found` | Webhookノードの Respond を `Using 'Respond to Webhook' Node` に変更、かつ全Switch分岐に Respond ノードを配置 |
