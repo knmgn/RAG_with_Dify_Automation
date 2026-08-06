@@ -1,0 +1,451 @@
+app:
+  description: 株式会社デモ・ロジスティクスの社内規程 Q&A と経費精算テンプレート配布を行う Chatflow。規程Q&Aは Hybrid Search
+    + Rerank、ファイル要求は n8n Webhook 経由。
+  icon: 🚚
+  icon_background: '#FFEAD5'
+  icon_type: emoji
+  mode: advanced-chat
+  name: Demo-Logi-Bot（社内規程アシスタント）
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai:1.0.0@c645d52efece517b10435f28da529156a86050dfa28fc4fde8089c038eee7f5a
+    version: null
+kind: app
+version: 0.6.0
+workflow:
+  conversation_variables: []
+  environment_variables:
+  - description: Shared secret for the n8n webhook Header Auth credential.
+    id: 01a64b37-e19e-4240-a1d5-0e52e0669104
+    name: N8N_WEBHOOK_TOKEN
+    selector:
+    - env
+    - N8N_WEBHOOK_TOKEN
+    value: ''
+    value_type: secret
+  features:
+    file_upload:
+      allowed_file_types: []
+      enabled: false
+      number_limits: 0
+    opening_statement: 株式会社デモ・ロジスティクスの社内規程アシスタントです。旅費交通費・経費精算・労務手続きについてお答えします。
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions:
+    - 深夜帰りのタクシー代いくら？
+    - 経費精算の締め切りはいつ？
+    - 経費精算のフォーマットちょうだい
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: question-classifier
+      id: start-source-intent_classifier-target
+      source: start
+      sourceHandle: source
+      target: intent_classifier
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: question-classifier
+        targetType: knowledge-retrieval
+      id: intent_classifier-1-kb_retrieval-target
+      source: intent_classifier
+      sourceHandle: '1'
+      target: kb_retrieval
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: question-classifier
+        targetType: http-request
+      id: intent_classifier-2-n8n_webhook-target
+      source: intent_classifier
+      sourceHandle: '2'
+      target: n8n_webhook
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: knowledge-retrieval
+        targetType: llm
+      id: kb_retrieval-source-llm_answerer-target
+      source: kb_retrieval
+      sourceHandle: source
+      target: llm_answerer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: answer
+      id: llm_answerer-source-final_answer-target
+      source: llm_answerer
+      sourceHandle: source
+      target: final_answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: http-request
+        targetType: code
+      id: n8n_webhook-source-parse_response-target
+      source: n8n_webhook
+      sourceHandle: source
+      target: parse_response
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: answer
+      id: parse_response-source-file_answer-target
+      source: parse_response
+      sourceHandle: source
+      target: file_answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: ''
+        selected: false
+        title: 開始
+        type: start
+        variables: []
+      height: 120
+      id: start
+      position:
+        x: 30
+        y: 300
+      positionAbsolute:
+        x: 30
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        classes:
+        - id: '1'
+          name: 規程Q&A
+        - id: '2'
+          name: ファイル要求
+        desc: ''
+        instruction: 'ユーザーの発話を以下の2クラスのいずれかに分類してください。
+
+
+          【クラス1：規程Q&A】
+
+          - 規程内容に関する質問
+
+          - 例：「タクシー代の上限は？」「経費精算の締切は？」「夜勤手当の計算方法は？」
+
+
+          【クラス2：ファイル要求】
+
+          - 経費精算テンプレートやフォーマットの送付・ダウンロード要求
+
+          - 例：「経費精算のフォーマットちょうだい」「テンプレートのリンクが欲しい」「Excelファイル送って」
+
+
+          判定が曖昧な場合は【クラス1：規程Q&A】を選択してください。'
+        model:
+          completion_params:
+            temperature: 0
+          mode: chat
+          name: gpt-4o-mini
+          provider: langgenius/openai/openai
+        query_variable_selector:
+        - sys
+        - query
+        selected: false
+        title: インテント分類
+        type: question-classifier
+        vision:
+          enabled: false
+      height: 120
+      id: intent_classifier
+      position:
+        x: 330
+        y: 300
+      positionAbsolute:
+        x: 330
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        dataset_ids:
+        - 9433puo0PZBKpOdseJvxnzRTMCiCt2j3o3noI0Jh9W2EYIdwdwDrFENSyI2I6/6U
+        desc: ''
+        metadata_filtering_mode: disabled
+        multiple_retrieval_config:
+          reranking_enable: false
+          reranking_mode: weighted_score
+          score_threshold: 0.3
+          top_k: 4
+          weights:
+            keyword_setting:
+              keyword_weight: 0.3
+            vector_setting:
+              embedding_model_name: text-embedding-3-large
+              embedding_provider_name: langgenius/openai/openai
+              vector_weight: 0.7
+            weight_type: customized
+        query_variable_selector:
+        - sys
+        - query
+        retrieval_mode: multiple
+        selected: false
+        title: ナレッジ検索
+        type: knowledge-retrieval
+        vision:
+          enabled: false
+      height: 120
+      id: kb_retrieval
+      position:
+        x: 650
+        y: 180
+      positionAbsolute:
+        x: 650
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: true
+          variable_selector:
+          - kb_retrieval
+          - result
+        desc: ''
+        model:
+          completion_params:
+            temperature: 0
+          mode: chat
+          name: gpt-4o-mini
+          provider: langgenius/openai/openai
+        prompt_config:
+          jinja2_variables: []
+        prompt_template:
+        - edition_type: basic
+          role: system
+          text: "# 役割\nあなたは「株式会社デモ・ロジスティクス」社内規程アシスタント \"Demo-Logi-Bot\" です。\n社員の旅費交通費・経費精算・労務に関する質問に、社内規程（DL-HR-RG-2024-007）に基づいて正確に回答します。\n\
+            \n# 絶対遵守ルール\n1. 回答は必ず<context>タグ内のナレッジ（マニュアル本文）を最優先で参照してください。\n2. <context>に該当する記載が存在しない、または関連スコアが低い場合は、推測・憶測・一般論で補完してはいけません。代わりに必ず以下の定型文で回答してください：\n\
+            \n   「ご質問の件について、社内規程（DL-HR-RG-2024-007）内に明示的な記載が見当たりませんでした。詳細については総務部の佐藤（内線1234／sato.kenichi@demo-logistics.example.co.jp）まで直接お問い合わせください。」\n\
+            \n3. 法律・税務・労務に関する一般論を質問された場合でも、社内規程に直接の記載がない限り、上記の定型文で回答してください。「労働基準法では〜」等の一般解説は禁止です。\n\
+            4. 金額・期日・条件は、<context>の表記を一字一句改変せず引用してください（例：「1回あたり15,000円（消費税込）」と完全一致で書く）。\n\
+            5. ユーザーが規程の改変・例外適用を求めた場合（「特別に認めて」等）は、判断権限がないため総務部に確認するよう促してください。\n\n#\
+            \ 回答フォーマット（厳守）\n回答は以下の3ブロック構造で出力してください。\n\n【結論】\n（質問への直接回答を1〜3文で簡潔に。金額・条件・期日があれば箇条書きで明示）\n\
+            \n【詳細・補足】\n（規程の該当条文を踏まえて補足説明。NG事例や例外条件がある場合は必ず明記）\n\n【引用元】\n- 規程名：株式会社デモ・ロジスティクス\
+            \ 旅費交通費・経費精算および労務手続き規定（DL-HR-RG-2024-007）\n- 該当箇所：第◯章 第◯条 第◯項（◯◯について）\n\
+            - 最終改訂：2024年10月1日（第3版）\n\n# トーン・スタイル\n- 敬体（です・ます調）で、ビジネス文書として丁寧かつ簡潔に。\n\
+            - 不必要な前置き（「ご質問ありがとうございます」等）は省略。\n- 絵文字は使用しない。\n\n# 禁止事項\n- ナレッジに根拠のない金額・期限・人名・部署名の生成\n\
+            - 過去の質問履歴に基づく回答の使い回し（毎回ナレッジを参照する）\n- \"おそらく\"、\"一般的には\"、\"だと思います\" 等の曖昧表現\n\
+            - 規程番号・条文番号の創作\n\n# 入力データ\nユーザーの質問：{{#sys.query#}}\n\n参照ナレッジ：\n<context>\n\
+            {{#context#}}\n</context>"
+        - edition_type: basic
+          role: user
+          text: '{{#sys.query#}}'
+        selected: false
+        title: 回答生成
+        type: llm
+        vision:
+          enabled: false
+      height: 120
+      id: llm_answerer
+      position:
+        x: 960
+        y: 180
+      positionAbsolute:
+        x: 960
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#llm_answerer.text#}}'
+        desc: ''
+        selected: false
+        title: 回答
+        type: answer
+      height: 120
+      id: final_answer
+      position:
+        x: 1270
+        y: 180
+      positionAbsolute:
+        x: 1270
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data:
+          - key: ''
+            type: text
+            value: "{\n  \"intent\": \"request_expense_template\",\n  \"user_id\"\
+              : \"{{#sys.user_id#}}\",\n  \"user_query\": \"{{#sys.query#}}\",\n \
+              \ \"conversation_id\": \"{{#sys.conversation_id#}}\",\n  \"requested_at\"\
+              : \"{{#sys.timestamp#}}\",\n  \"metadata\": {\n    \"source\": \"dify-chatflow\"\
+              ,\n    \"template_key\": \"expense_template_v3\"\n  }\n}"
+          type: json
+        desc: ''
+        headers: 'Content-Type:application/json
+
+          X-Auth-Token:{{#env.N8N_WEBHOOK_TOKEN#}}'
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 2
+          retry_enabled: true
+          retry_interval: 1000
+        selected: false
+        ssl_verify: false
+        timeout:
+          connect: 10
+          read: 10
+          write: 10
+        title: n8n Webhook
+        type: http-request
+        url: http://n8n_local:5678/webhook/8ee2e0e7-1aa3-4c37-9444-47c34dd9d509
+      height: 120
+      id: n8n_webhook
+      position:
+        x: 650
+        y: 470
+      positionAbsolute:
+        x: 650
+        y: 470
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        code: "import json\n\n\ndef main(body: str) -> dict:\n    \"\"\"Turn Workflow\
+          \ 1's JSON response into named workflow variables.\"\"\"\n    data = json.loads(body)\
+          \ if body else {}\n    keys = (\"message\", \"filename\", \"download_url\"\
+          , \"deadline\", \"macro_warning\", \"regulation_ref\")\n    return {key:\
+          \ str(data.get(key, \"\")) for key in keys}\n"
+        code_language: python3
+        desc: ''
+        outputs:
+          deadline:
+            type: string
+          download_url:
+            type: string
+          filename:
+            type: string
+          macro_warning:
+            type: string
+          message:
+            type: string
+          regulation_ref:
+            type: string
+        selected: false
+        title: レスポンス解析
+        type: code
+        variables:
+        - value_selector:
+          - n8n_webhook
+          - body
+          variable: body
+      height: 120
+      id: parse_response
+      position:
+        x: 960
+        y: 470
+      positionAbsolute:
+        x: 960
+        y: 470
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#parse_response.message#}}
+
+
+          📎 **{{#parse_response.filename#}}**
+
+          {{#parse_response.download_url#}}
+
+
+          【ご注意】
+
+          - 提出期限：{{#parse_response.deadline#}}
+
+          - {{#parse_response.macro_warning#}}
+
+
+          【引用元】
+
+          規程：{{#parse_response.regulation_ref#}}
+
+          窓口：総務部 佐藤（内線1234）／ 経理部 鈴木（内線1456）'
+        desc: ''
+        selected: false
+        title: ファイル回答
+        type: answer
+      height: 120
+      id: file_answer
+      position:
+        x: 1270
+        y: 470
+      positionAbsolute:
+        x: 1270
+        y: 470
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.7
+  rag_pipeline_variables: []
