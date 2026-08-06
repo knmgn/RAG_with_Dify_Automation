@@ -26,7 +26,15 @@ A reusable architecture (**Dify high-precision RAG + n8n executable automation**
 4. **Ships an all-local, closed-network deployment option** (`docker/`) where every byte stays inside the customer's server. For Japanese SMEs paranoid about data leaving the building, this is decisive — see deliverable #4 below.
 
 **Reusability beyond Japan**
-The same Chatflow topology (Classifier → Hybrid Retrieval → Score Gate → Guardrailed LLM → Webhook) ports to US/EU SMEs, multilingual manufacturing in Southeast Asia, and healthcare/legal firms. Only three layers need localization: the knowledge corpus, the system-prompt language and deflection contact, and the rerank model (e.g. `cohere/rerank-multilingual-v3.0` → `cohere/rerank-english-v3.0`). The graph topology, intent classifier, n8n integration pattern, and Slack Block Kit payload remain unchanged — and this portability is the core value proposition.
+The same Chatflow topology (Classifier → Hybrid Retrieval → Guardrailed LLM → Webhook) ports to US/EU SMEs, multilingual manufacturing in Southeast Asia, and healthcare/legal firms. Only two layers need localization: the knowledge corpus, and the system-prompt language plus deflection contact. The graph topology, intent classifier, n8n integration pattern, and Slack Block Kit payload remain unchanged — and this portability is the core value proposition.
+
+**Measured, not asserted**
+The whole environment is provisioned through Dify's API rather than by clicking through the admin UI (`scripts/`), so it is reproducible and the numbers below are re-runnable on any machine:
+
+- **Recall@4 = 100%** on the ten test queries in the design doc (`scripts/measure_recall.py`)
+- **3/3 end-to-end tests pass** — policy Q&A, refusal on out-of-scope questions, and file delivery through n8n (`scripts/test_e2e.py`)
+- **OpenAI is the only external egress.** Retrieval ranking runs inside Weaviate (Hybrid Search + Weighted Score), so no third-party reranking service ever sees the customer's questions or policy text.
+- Section §4-8 of the design doc documents **11 concrete failure modes** found while building this for real — the kind that fail silently rather than raising an error.
 
 ---
 
@@ -59,14 +67,21 @@ pandoc 01_dummy_manual_demo_logistics.md \
 上記マニュアルをナレッジに食わせる Dify Bot の設計書。
 - **Targeted Use Case for Japanese SMEs**（冒頭の英文セクション — 海外クライアント向け）
 - システムプロンプト（ハルシネーション抑制ガードレール、Citation強制）
-- ハイブリッド検索（Vector + Keyword）× Rerank の設定
+- ハイブリッド検索（Vector + Keyword）× Weighted Score の設定
 - Question Classifier による Intent 検出
 - **3つのn8n連携パターン**：
   - §4-1 フル版（Drive + Slack API連携、50名以上の組織向け）
   - §4-6 シンプル版（Google Drive リンク共有のみ、PoC向け）
-  - **§4-7 完全ローカルDocker版（中小企業向け本命、データ外部流出ゼロ）** ← 推奨
-- §4-8 実装中に発見した運用ノウハウ4件（n8n allowlist / Webhook Respond モード / macOS xattr / RFC 5987）
-- テストクエリ集、デモ動画台本、納品チェックリスト
+  - **§4-7 完全ローカルDocker版（中小企業向け本命、外部送信は OpenAI のみ）** ← 推奨
+- §4-8 実装中に発見した運用ノウハウ**11件**
+  - ①〜④ n8n / Docker / macOS 側（allowlist / Webhook Respond モード / xattr / RFC 5987）
+  - ⑤〜⑪ Dify 側（区切り文字の文字化け / `.md` 投入でチャンク設定が無効化 / Rerank APIの無音失敗 /
+    コンテキスト変数の誤記 / HTTP Requestのbodyは文字列 / **ssrf_proxy経由の通信** / 日本語BM25）
+- テストクエリ集と**実測 Recall@4**、デモ動画台本、納品チェックリスト
+
+> 💡 設計書は v1.5 で**実機検証を反映済み**です。v1.4 までの机上設計のうち、
+> 実際には動作しなかった記述は本文を修正したうえで、
+> 「何がなぜ違ったか」を §4-8 に検証記録として残しています。
 
 ### 3. ダミー経費精算テンプレート（Excel）
 [`経費精算テンプレート_v3.xlsx`](./経費精算テンプレート_v3.xlsx) ／ [`scripts/build_expense_template.py`](./scripts/build_expense_template.py)
@@ -101,7 +116,8 @@ python3 scripts/build_expense_template.py
 - `docker/README.md` ─ `git clone` → `docker compose up -d` 一発で動く手順書
 - `docker/n8n/docker-compose.yml` ─ n8n 本体 + xlsx volume + 共有network参加済み
 - `docker/n8n/templates/.gitkeep` ─ xlsx 配置先（設計書 §4-8 ① の allowlist 制約に準拠）
-- `docker/dify/docker-compose.override.yaml` ─ Dify公式に重ねるネットワーク追加だけの差分（Dify本体は触らない）
+- `docker/n8n/workflows/*.json` ─ ワークフロー2本のエクスポート（そのままインポート可能）
+- `docker/dify/docker-compose.override.yaml` ─ Dify公式に重ねる差分（Dify本体は触らない）。api / worker / **ssrf_proxy** の共有ネットワーク参加と、squid の宛先許可設定
 - `docker/test/test_webhook.sh` ─ 4段階の疎通テストスクリプト（host→n8n / Dify→n8n / Workflow1全体 / Workflow2バイナリ応答）
 
 #### クイックスタート（要約）
@@ -126,17 +142,61 @@ export N8N_WEBHOOK_TOKEN="<your token>"
 
 詳細は [`docker/README.md`](./docker/README.md) を参照。
 
+### 5. Dify 構築自動化スクリプト
+[`scripts/`](./scripts/) ／ [`dify/chatflow_dsl.yaml`](./dify/chatflow_dsl.yaml)
+
+Dify のナレッジと Chatflow を、**管理画面を一切触らずに** Console API 経由で構築するスクリプト群。
+規程が改訂されたときの作り直しも、クライアント環境への再現配備も、コマンド1本で済む。
+
+| ファイル | 役割 |
+|---|---|
+| `scripts/dify_console.py` | Dify Console API クライアント（Python標準ライブラリのみ、`pip install` 不要） |
+| `scripts/provision_knowledge.py` | ナレッジ構築（Parent-Child分割・Hybrid Search・メタデータ6項目） |
+| `scripts/provision_chatflow.py` | Chatflow構築（DSL生成 → import → publish → YAMLエクスポート） |
+| `scripts/measure_recall.py` | 設計書 §3-4 のテストクエリで Recall@4 を実測 |
+| `scripts/test_e2e.py` | E2Eテスト（規程Q&A／ガードレール／ファイル要求→n8n→ダウンロード） |
+
+```bash
+cp scripts/.dify_admin.env.example scripts/.dify_admin.env   # DIFY_PASSWORD を記入
+python3 scripts/provision_knowledge.py
+python3 scripts/provision_chatflow.py
+python3 scripts/measure_recall.py --threshold 0.3   # → Recall@4 = 10/10 = 100%
+python3 scripts/test_e2e.py                          # → All 3 end-to-end tests passed
+```
+
+`dify/chatflow_dsl.yaml` は上記で生成された Chatflow の DSL（secret 除外済み）。
+Dify の「DSLインポート」からそのまま読み込める。
+
+`scripts/export_n8n_workflows.py` は n8n のワークフローを `docker/n8n/workflows/` に書き出す。
+`n8n export:workflow` の生出力には `shared` ブロックに**所有者のメールアドレス**が含まれるため、
+公開リポジトリにそのままコミットできない。このスクリプトが除去する。
+
+### 6. 運用マニュアル
+[`03_operations_manual.md`](./03_operations_manual.md)
+
+構築後の運用担当者向け。起動停止、**規程改訂時の再Embedding手順**、xlsxテンプレートの差し替え、
+バックアップとリストア、症状別の一次切り分け、定期点検の頻度とコストの目安。
+
+### 7. API サンプル集
+[`04_api_examples.md`](./04_api_examples.md)
+
+Bot を既存の社内システムに組み込む開発者向けの curl / Postman コレクション。
+規程Q&A（blocking / streaming）、会話の継続、ファイル要求、n8n の直接呼び出し、
+ヘルスチェック、本番組み込み時の注意点。**全コマンド実機で応答を確認済み**。
+
 ## 使い方
 
-1. `01_dummy_manual_demo_logistics.md` を PDF化してDifyのナレッジにアップロード
+1. `docker/README.md` の手順でローカル環境（Dify Self-Hosted + n8n）を起動
 2. `経費精算テンプレート_v3.xlsx` を配布手段に応じて配置
    - 完全ローカル（推奨）：`docker/n8n/templates/expense_template_v3.xlsx` に配置
    - シンプル版：Google Drive にアップロード（リンク共有設定）
    - フル版：Google Drive + Slack 連携の API 設定
-3. `02_dify_chatflow_design.md` の設定値をもとに Dify Chatflow を組み立て
-4. n8n のワークフローを設計書 §4-7 ②（完全ローカル）or §4-2（フル版）の通り構築
-5. `docker/test/test_webhook.sh` で4段階の疎通テスト
-6. デモ動画台本（設計書の第6章）に沿って撮影
+3. n8n のワークフローを設計書 §4-7 ②（完全ローカル）or §4-2（フル版）の通り構築
+4. `docker/test/test_webhook.sh` で n8n 側の4段階疎通テスト
+5. `scripts/provision_knowledge.py` → `scripts/provision_chatflow.py` で Dify 側を構築
+   （手動で組む場合は `02_dify_chatflow_design.md` の設定値を参照）
+6. `scripts/measure_recall.py` と `scripts/test_e2e.py` で品質を実測
+7. デモ動画台本（設計書の第6章）に沿って撮影
 
 ## ライセンス
 
