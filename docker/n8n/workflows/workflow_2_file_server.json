@@ -1,0 +1,93 @@
+{
+  "connections": {
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Respond to Webhook",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Read/Write Files from Disk",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "name": "Demo_Logi - Workflow 2：File Server",
+  "nodes": [
+    {
+      "id": "a16667fe-9968-44e8-987a-3840ea1943bb",
+      "name": "Webhook",
+      "parameters": {
+        "options": {},
+        "path": "files/expense-v3",
+        "responseMode": "responseNode"
+      },
+      "position": [
+        0,
+        0
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "e8083928-95ea-487b-8dae-1dd60e030e83"
+    },
+    {
+      "id": "e28bac73-4809-4710-a038-18b9385c6524",
+      "name": "Read/Write Files from Disk",
+      "parameters": {
+        "fileSelector": "/home/node/.n8n-files/expense_template_v3.xlsx",
+        "options": {}
+      },
+      "position": [
+        208,
+        0
+      ],
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1
+    },
+    {
+      "id": "e8f00ba3-69c3-4d88-acd5-2db20cdf5cd8",
+      "name": "Respond to Webhook",
+      "parameters": {
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              },
+              {
+                "name": "Content-Disposition",
+                "value": "=attachment; filename=\"expense_template_v3.xlsx\"; filename*=UTF-8''%E7%B5%8C%E8%B2%BB%E7%B2%BE%E7%AE%97%E3%83%86%E3%83%B3%E3%83%97%E3%83%AC%E3%83%BC%E3%83%88_v3.xlsx"
+              }
+            ]
+          }
+        },
+        "respondWith": "binary",
+        "responseDataSource": "set"
+      },
+      "position": [
+        416,
+        0
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "binaryMode": "separate",
+    "executionOrder": "v1"
+  }
+}

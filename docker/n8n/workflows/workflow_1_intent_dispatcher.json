@@ -1,0 +1,233 @@
+{
+  "connections": {
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Switch",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Output_0",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Output_1",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Fallback",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Edit Fields",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "name": "Demo_Logi - Workflow 1：Intent Dispatcher",
+  "nodes": [
+    {
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ImtPVx4cD5yqFkcG",
+          "name": "Header Auth account"
+        }
+      },
+      "id": "6b9ada3f-9b6d-4d52-b87f-5e69546aa531",
+      "name": "Webhook",
+      "parameters": {
+        "authentication": "headerAuth",
+        "httpMethod": "POST",
+        "options": {},
+        "path": "8ee2e0e7-1aa3-4c37-9444-47c34dd9d509",
+        "responseMode": "responseNode"
+      },
+      "position": [
+        -208,
+        -32
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "8ee2e0e7-1aa3-4c37-9444-47c34dd9d509"
+    },
+    {
+      "id": "54b2782d-ecf1-4129-b3ab-d53b5dff6342",
+      "name": "Edit Fields",
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f91185f4-386a-4745-8bf8-a1884cf4bd2b",
+              "name": "user_id",
+              "type": "string",
+              "value": "={{ $json.body.user_id }}"
+            },
+            {
+              "id": "0aa58b32-5986-4e32-8e5b-30139636022a",
+              "name": "=intent",
+              "type": "string",
+              "value": "={{ $json.body.intent }}"
+            },
+            {
+              "id": "a5749782-c385-41aa-8599-754ddee22754",
+              "name": "=template_key",
+              "type": "string",
+              "value": "={{ $json.body.metadata.template_key }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "position": [
+        -16,
+        -32
+      ],
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4
+    },
+    {
+      "id": "287caec0-65fb-4560-8a3d-9f700952e5b0",
+      "name": "Switch",
+      "parameters": {
+        "options": {
+          "fallbackOutput": "extra"
+        },
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "0d7c736c-af98-48a8-819c-1a8c1bf77af4",
+                    "leftValue": "={{ $json.intent }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "=request_expense_template"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              }
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "1de14cee-d6fc-4b2a-a989-a98b624b254a",
+                    "leftValue": "={{ $json.intent }}",
+                    "operator": {
+                      "name": "filter.operator.equals",
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "request_taxi_form"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                }
+              }
+            }
+          ]
+        }
+      },
+      "position": [
+        192,
+        -32
+      ],
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4
+    },
+    {
+      "id": "34a44fb5-5a91-44f4-973a-54864242cc62",
+      "name": "Output_1",
+      "parameters": {
+        "options": {
+          "responseCode": 501
+        },
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"not_implemented\",\n  \"code\": 501,\n  \"intent\": \"request_taxi_form\",\n  \"message\": \"Taxi form delivery is not yet implemented in this PoC.\"\n}"
+      },
+      "position": [
+        400,
+        16
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5
+    },
+    {
+      "id": "8a56d130-cd56-4bae-b9ab-1d3f9e589d0f",
+      "name": "Output_0",
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        },
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"intent\": \"request_expense_template\",\n  \"filename\": \"経費精算テンプレート_v3.xlsx\",\n  \"download_url\": \"http://localhost:5678/webhook/files/expense-v3\",\n  \"message\": \"経費精算テンプレートをご用意しました。下記URLからダウンロードしてください。\",\n  \"regulation_ref\": \"DL-HR-RG-2024-007 第8条・第9条\",\n  \"deadline\": \"毎月25日17:00必着\",\n  \"macro_warning\": \"マクロを必ず有効化してください（規程第9条第4項）\"\n}"
+      },
+      "position": [
+        400,
+        -144
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5
+    },
+    {
+      "id": "cd2155a7-3161-49a1-8e18-8b2bc0c751be",
+      "name": "Fallback",
+      "parameters": {
+        "options": {
+          "responseCode": 400
+        },
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"error\",\n  \"code\": 400,\n  \"message\": \"Unknown intent. Please contact General Affairs (Sato, ext.1234).\",\n  \"received_intent\": \"{{ $json.intent }}\"\n}"
+      },
+      "position": [
+        400,
+        176
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "binaryMode": "separate",
+    "executionOrder": "v1"
+  }
+}

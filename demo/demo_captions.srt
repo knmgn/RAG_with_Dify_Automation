@@ -1,0 +1,54 @@
+1
+00:00:01,000 --> 00:00:05,000
+社内チャットに話しかけるだけ
+Just ask, in plain Japanese
+
+2
+00:00:05,000 --> 00:00:08,000
+経費精算テンプレートが届く
+The expense template arrives
+
+3
+00:00:08,000 --> 00:00:11,000
+このURL、localhost です
+Note the URL: localhost
+
+4
+00:00:11,000 --> 00:00:14,000
+データは社外に出ていません
+Nothing left the building
+
+5
+00:00:14,000 --> 00:00:20,000
+30ページの規程から、根拠付きで即回答
+Instant answers from a 30-page policy
+
+6
+00:00:20,000 --> 00:00:30,000
+金額・条文番号は原文どおり引用
+Amounts and clause numbers quoted verbatim
+
+7
+00:00:30,000 --> 00:00:36,000
+規程にない質問には答えません
+It refuses questions the policy doesn't cover
+
+8
+00:00:36,000 --> 00:00:40,000
+担当者に引き継ぐだけ。作り話はしない
+It hands off to a human. No invented answers
+
+9
+00:00:40,000 --> 00:00:50,000
+Dify と n8n はすべて社内サーバー内
+Dify and n8n both run on your own server
+
+10
+00:00:50,000 --> 00:00:56,000
+社内問い合わせを自動化。貴社サーバー内で完結
+Automate internal Q&A. Entirely on-premise
+
+11
+00:00:56,000 --> 00:01:00,000
+ご相談ください
+Let's talk
