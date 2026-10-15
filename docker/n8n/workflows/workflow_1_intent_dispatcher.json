@@ -48,7 +48,7 @@
       ]
     }
   },
-  "name": "Demo_Logi - Workflow 1：Intent Dispatcher",
+  "name": "NexusLogi - Workflow 1：Intent Dispatcher",
   "nodes": [
     {
       "credentials": {
@@ -198,7 +198,7 @@
           "responseCode": 200
         },
         "respondWith": "json",
-        "responseBody": "={\n  \"status\": \"success\",\n  \"intent\": \"request_expense_template\",\n  \"filename\": \"expense_template_v3.xlsx\",\n  \"download_url\": \"http://localhost:5678/webhook/files/expense-v3\",\n  \"message\": \"Here is the expense report template. Download it from the link below.\",\n  \"regulation_ref\": \"DL-HR-RG-2024-007 Articles 8 and 9\",\n  \"deadline\": \"Must be received by 5:00 PM on the 25th of each month\",\n  \"macro_warning\": \"Macros must be enabled (Article 9, Paragraph 4)\"\n}"
+        "responseBody": "={\n  \"status\": \"success\",\n  \"intent\": \"request_expense_template\",\n  \"filename\": \"expense_template_v3.xlsx\",\n  \"download_url\": \"http://localhost:5678/webhook/files/expense-v3\",\n  \"message\": \"Here is the expense report template. Download it from the link below.\",\n  \"regulation_ref\": \"NL-HR-RG-2024-007 Articles 8 and 9\",\n  \"deadline\": \"Must be received by 5:00 PM on the 25th of each month\",\n  \"macro_warning\": \"Macros must be enabled (Article 9, Paragraph 4)\"\n}"
       },
       "position": [
         400,

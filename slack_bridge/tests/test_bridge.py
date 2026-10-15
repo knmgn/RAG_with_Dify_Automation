@@ -26,8 +26,8 @@ from store import ConversationStore  # noqa: E402
 logging.disable(logging.CRITICAL)
 
 REFUSAL = (
-    "No explicit provision covering your question was found in the internal policy (DL-HR-RG-2024-007). "
-    "Please contact People Operations directly (ext. 1234 / people-ops@demo-logistics.example.com)."
+    "No explicit provision covering your question was found in the internal policy (NL-HR-RG-2024-007). "
+    "Please contact People Operations directly (ext. 1234 / people-ops@nexus-logistics.example.com)."
 )
 RIDE_ANSWER = "**Answer**\nA late-night ride home is capped at **USD 100 per ride (tax and tip included)**."
 
@@ -104,7 +104,7 @@ def all_text(blocks: list[dict[str, Any]]) -> str:
 
 class QuestionTests(unittest.TestCase):
     def test_answers_in_thread_with_sources(self) -> None:
-        citation = Citation("DL-HR-RG-2024-007.txt", "Article 5 (Late-Night Rideshare and Taxi)", 0.6438)
+        citation = Citation("NL-HR-RG-2024-007.txt", "Article 5 (Late-Night Rideshare and Taxi)", 0.6438)
         dify = FakeDify([DifyAnswer(RIDE_ANSWER, "conv-1", [citation])])
         slack = FakeSlack()
         make_bridge(dify).handle_question(mention("<@UBOT> How much can I claim for a late-night ride home?"), slack)

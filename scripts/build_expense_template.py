@@ -1,8 +1,8 @@
 """
 Build script for expense_template_v3.xlsx (expense report template v3).
 
-Generates a dummy Excel expense report template that complies with Demo Logistics
-Inc.'s Travel, Expense Reimbursement and HR Procedures Policy (DL-HR-RG-2024-007).
+Generates a dummy Excel expense report template that complies with Nexus Logistics
+Inc.'s Travel, Expense Reimbursement and HR Procedures Policy (NL-HR-RG-2024-007).
 This is the file the bot hands out when an employee asks for the template.
 
 Usage:
@@ -97,7 +97,7 @@ def build_main_sheet(wb: Workbook) -> None:
     ws.row_dimensions[1].height = 32
 
     ws.merge_cells("A2:I2")
-    ws["A2"] = "Form No. F-001-v3 / Governing policy: DL-HR-RG-2024-007 (Revision 3, revised October 1, 2024)"
+    ws["A2"] = "Form No. F-001-v3 / Governing policy: NL-HR-RG-2024-007 (Revision 3, revised October 1, 2024)"
     ws["A2"].font = _body_font(9, color="595959")
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[2].height = 18
@@ -132,7 +132,7 @@ def build_main_sheet(wb: Workbook) -> None:
     ws["B4"] = "05/26/2026"
     ws["E4"] = "EX-2026-05-0123"
     ws["B5"] = "Jordan Smith"
-    ws["E5"] = "DL-04321"
+    ws["E5"] = "NL-04321"
     ws["B6"] = "Sales, Enterprise Accounts"
     ws["E6"] = "Account Manager"
     ws["B7"] = "05/01/2026 – 05/25/2026"
@@ -534,7 +534,7 @@ def build_instructions_sheet(wb: Workbook) -> None:
     ws.row_dimensions[1].height = 30
 
     ws.merge_cells("A2:B2")
-    ws["A2"] = "Governing policy: Demo Logistics Inc. Travel, Expense Reimbursement and HR Procedures Policy (DL-HR-RG-2024-007, Revision 3)"
+    ws["A2"] = "Governing policy: Nexus Logistics, Inc. Travel, Expense Reimbursement and HR Procedures Policy (NL-HR-RG-2024-007, Revision 3)"
     ws["A2"].font = _body_font(9, color="595959")
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[2].height = 18
@@ -574,8 +574,8 @@ def build_instructions_sheet(wb: Workbook) -> None:
             "Recommended file name: Expenses_YYYY-MM_FirstLast.xlsx",
         ]),
         ("Contacts", [
-            "Expenses and payments: Accounts Payable (ext. 1456 / accounts-payable@demo-logistics.example.com)",
-            "Policy and HR: People Operations (ext. 1234 / people-ops@demo-logistics.example.com)",
+            "Expenses and payments: Accounts Payable (ext. 1456 / accounts-payable@nexus-logistics.example.com)",
+            "Policy and HR: People Operations (ext. 1234 / people-ops@nexus-logistics.example.com)",
             "Shifts and night work: Logistics Operations (ext. 2210)",
         ]),
     ]
@@ -614,11 +614,11 @@ def build() -> Path:
     build_instructions_sheet(wb)
 
     wb.properties.title = "Expense Report Template v3"
-    wb.properties.creator = "Demo Logistics Inc. People Operations"
-    wb.properties.lastModifiedBy = "Demo-Logi-Bot"
+    wb.properties.creator = "Nexus Logistics, Inc. People Operations"
+    wb.properties.lastModifiedBy = "NexusLogi Bot"
     wb.properties.subject = "Expense Reimbursement Template (Dummy)"
     wb.properties.description = (
-        "Complies with policy DL-HR-RG-2024-007 / dummy file for the Dify x n8n portfolio demo"
+        "Complies with policy NL-HR-RG-2024-007 / dummy file for the Dify x n8n portfolio demo"
     )
     wb.properties.keywords = "expense report, travel, rideshare, policy, demo"
 

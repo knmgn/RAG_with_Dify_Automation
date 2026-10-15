@@ -86,7 +86,7 @@ def main() -> int:
     api_key = get_api_key(console, app_id)
 
     print("=" * 72)
-    print("  Demo-Logi-Bot  —  end-to-end test (Dify Service API)")
+    print("  NexusLogi Bot  —  end-to-end test (Dify Service API)")
     print(f"  app_id: {app_id}")
     print("=" * 72)
     print()
@@ -98,7 +98,7 @@ def main() -> int:
     answer = ask(base_url, api_key, "How much can I claim for a late-night ride home?").get("answer", "")
     checks = {
         "quotes the cap verbatim (USD 100 per ride)": "USD 100 per ride" in answer,
-        "cites the regulation number": "DL-HR-RG-2024-007" in answer,
+        "cites the regulation number": "NL-HR-RG-2024-007" in answer,
         "uses the 3-block format (Answer … Source)": "Answer" in answer and "Source" in answer,
         "did not fall back to the deflection message": FALLBACK not in answer,
     }

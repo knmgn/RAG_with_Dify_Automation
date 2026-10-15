@@ -1,6 +1,6 @@
 # Slack Front End — Socket Mode Bridge with Human Escalation
 
-Puts Demo-Logi-Bot inside Slack. Employees ask in a channel (`@Demo-Logi-Bot …`) or in a direct
+Puts NexusLogi Bot inside Slack. Employees ask in a channel (`@nexuslogi-bot …`) or in a direct
 message, and the answer comes back in the thread with its sources. When the guardrail refuses a
 question the policy does not cover, the question is escalated to a human owner, whose reply is
 posted in the employee's thread.
@@ -14,13 +14,13 @@ sequenceDiagram
     participant D as Dify Chatflow
     actor O as Policy owner<br/>(People Operations)
 
-    E->>S: @Demo-Logi-Bot How much can I claim for a late-night ride home?
+    E->>S: @nexuslogi-bot How much can I claim for a late-night ride home?
     S-->>B: app_mention (over outbound WebSocket)
     B->>D: POST /v1/chat-messages (conversation per thread)
     D-->>B: answer + retriever_resources
     B->>S: threaded reply + sources (Article 5 · relevance score)
 
-    E->>S: @Demo-Logi-Bot Do I get an allowance if I adopt a cat?
+    E->>S: @nexuslogi-bot Do I get an allowance if I adopt a cat?
     S-->>B: app_mention
     B->>D: POST /v1/chat-messages
     D-->>B: fixed refusal (guardrail fired)
@@ -46,7 +46,7 @@ and the policy text sent to the LLM still goes only to OpenAI.
 
 | Behavior | Detail |
 |---|---|
-| Channel questions | `@Demo-Logi-Bot <question>`. The reply goes in the thread |
+| Channel questions | `@nexuslogi-bot <question>`. The reply goes in the thread |
 | Direct messages | Any DM to the bot is a question |
 | Follow-ups | One Slack thread = one Dify conversation, so "Do I need a receipt for that?" keeps the context. Mapping persisted in SQLite |
 | Sources | Each retrieved article is listed once with its relevance score. Never shown on a refusal |
@@ -70,7 +70,7 @@ set n8n's `WEBHOOK_URL` to an internal DNS name (see [`../04_api_examples.md`](.
    `SLACK_BOT_TOKEN` (`xoxb-…`). If the app was installed before `chat:write.customize` and
    `users:read` were added to the manifest, update the manifest and **reinstall** to grant them.
 4. **Escalation channel.** Create a channel for policy owners (e.g. `#policy-escalations`), run
-   `/invite @Demo-Logi-Bot` in it, and copy its channel ID into `SLACK_ESCALATION_CHANNEL`.
+   `/invite @nexuslogi-bot` in it, and copy its channel ID into `SLACK_ESCALATION_CHANNEL`.
 5. **Dify API key.** In Dify open the app → API Access → API Key, or mint one from a script as shown
    in [`../04_api_examples.md`](../04_api_examples.md) §0. This is `DIFY_API_KEY`.
 6. **Run it.**

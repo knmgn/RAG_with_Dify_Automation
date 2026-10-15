@@ -1,4 +1,4 @@
-# Operations Manual — Demo-Logi-Bot (§4-7 fully local setup)
+# Operations Manual — NexusLogi Bot (§4-7 fully local setup)
 
 > Audience: the people who **operate** the deployed environment (internal IT, People Operations administrators)
 > Prerequisite: the environment is running, set up as described in `docker/README.md`
@@ -91,7 +91,7 @@ Use this when the policy moves to revision 4, a clause is added, and so on. **It
 
 ```bash
 # 1. Update the policy text
-#    Edit 01_dummy_manual_demo_logistics.md
+#    Edit 01_policy_nexus_logistics.md
 #    (always keep headings in the form ### Article N (...); see below)
 
 # 2. Rebuild the knowledge base
@@ -128,7 +128,7 @@ If an article exceeds 3,500 characters, raise `PARENT_MAX_CHARS` in
 ```bash
 python3 -c "
 import re
-text = open('01_dummy_manual_demo_logistics.md', encoding='utf-8').read()
+text = open('01_policy_nexus_logistics.md', encoding='utf-8').read()
 for part in re.split(r'(?m)^(?=### )', text):
     if part.strip():
         print(len(part), part.splitlines()[0][:40])

@@ -1,12 +1,12 @@
 app:
-  description: Answers Demo Logistics Inc. policy questions and delivers the expense
+  description: Answers Nexus Logistics, Inc. policy questions and delivers the expense
     report template. Policy Q&A uses Hybrid Search with Weighted Score; file requests
     go through an n8n webhook.
   icon: 🚚
   icon_background: '#FFEAD5'
   icon_type: emoji
   mode: advanced-chat
-  name: Demo-Logi-Bot (Internal Policy Assistant)
+  name: NexusLogi Bot (Internal Policy Assistant)
   use_icon_as_answer_icon: false
 dependencies:
 - current_identifier: null
@@ -32,8 +32,8 @@ workflow:
       allowed_file_types: []
       enabled: false
       number_limits: 0
-    opening_statement: Hi, I'm Demo-Logi-Bot, the internal policy assistant for Demo
-      Logistics Inc. Ask me about travel, expense reimbursement and HR procedures.
+    opening_statement: Hi, I'm NexusLogi Bot, the internal policy assistant for Nexus
+      Logistics, Inc. Ask me about travel, expense reimbursement and HR procedures.
     retriever_resource:
       enabled: true
     sensitive_word_avoidance:
@@ -268,16 +268,16 @@ workflow:
         prompt_template:
         - edition_type: basic
           role: system
-          text: "# Role\nYou are \"Demo-Logi-Bot\", the internal policy assistant\
-            \ for Demo Logistics Inc.\nYou answer employee questions about travel,\
+          text: "# Role\nYou are \"NexusLogi Bot\", the internal policy assistant\
+            \ for Nexus Logistics, Inc.\nYou answer employee questions about travel,\
             \ expenses and HR procedures accurately, based on the internal policy\
-            \ (DL-HR-RG-2024-007).\n\n# Non-negotiable rules\n1. Always base your\
+            \ (NL-HR-RG-2024-007).\n\n# Non-negotiable rules\n1. Always base your\
             \ answer on the knowledge inside the <context> tag (the policy text).\n\
             2. If <context> does not contain the answer, or its relevance is low,\
             \ NEVER fill the gap with guesses, assumptions or general knowledge. Instead,\
             \ reply with exactly this message:\n\n   \"No explicit provision covering\
-            \ your question was found in the internal policy (DL-HR-RG-2024-007).\
-            \ Please contact People Operations directly (ext. 1234 / people-ops@demo-logistics.example.com).\"\
+            \ your question was found in the internal policy (NL-HR-RG-2024-007).\
+            \ Please contact People Operations directly (ext. 1234 / people-ops@nexus-logistics.example.com).\"\
             \n\n3. Even when asked about general legal, tax or employment matters,\
             \ use the message above unless the internal policy addresses the point\
             \ directly. General explanations such as \"Under the FLSA...\" or \"The\
@@ -291,8 +291,8 @@ workflow:
             \ answer in 1-3 sentences. List any amounts, conditions and deadlines\
             \ as bullet points.)\n\n**Details**\n(Supporting explanation based on\
             \ the relevant article. Always mention prohibited cases or exceptions\
-            \ if there are any.)\n\n**Source**\n- Policy: Demo Logistics Inc. Travel,\
-            \ Expense Reimbursement and HR Procedures Policy (DL-HR-RG-2024-007)\n\
+            \ if there are any.)\n\n**Source**\n- Policy: Nexus Logistics, Inc. Travel,\
+            \ Expense Reimbursement and HR Procedures Policy (NL-HR-RG-2024-007)\n\
             - Section: Article X, Clause/Paragraph X (topic)\n- Last revised: October\
             \ 1, 2024 (Revision 3)\n\n# Tone and style\n- Polite, concise business\
             \ English.\n- No unnecessary preamble (such as \"Thank you for your question\"\

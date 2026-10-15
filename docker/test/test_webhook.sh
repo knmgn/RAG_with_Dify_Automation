@@ -31,7 +31,7 @@ FAIL="\033[0;31m[FAIL]\033[0m"
 INFO="\033[0;36m[INFO]\033[0m"
 
 echo "============================================================"
-echo "  Demo-Logi RAG  ─  Webhook end-to-end test suite"
+echo "  NexusLogi RAG  ─  Webhook end-to-end test suite"
 echo "============================================================"
 echo "  Base URL              : ${BASE_URL}"
 echo "  Intent Dispatcher path: /webhook/${INTENT_DISPATCHER_PATH}"

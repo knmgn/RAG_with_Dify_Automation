@@ -11,9 +11,10 @@
 ![OpenAI](https://img.shields.io/badge/OpenAI-gpt--4o--mini-412991?logo=openai&logoColor=white)
 ![Enterprise AI](https://img.shields.io/badge/Enterprise_AI-Zero--Hallucination_RAG-111827)
 
-> **Demo tenant:** *Demo Logistics Inc.*, a fictional logistics company, and its
-> **Travel & Expense / HR Procedures policy (DL-HR-RG-2024-007, rev. 3)**.
-> All companies, people, addresses and phone numbers in this repository are made up.
+> **Demo tenant:** *Nexus Logistics, Inc.*, the logistics company of the fictional **Nexus Commerce**
+> group, and its **Travel, Expense Reimbursement and HR Procedures Policy (NL-HR-RG-2024-007, rev. 3)**.
+> The bot is **NexusLogi Bot**. All companies, people, addresses and phone numbers in this repository
+> are made up, and any resemblance to real organizations is coincidental.
 
 ---
 
@@ -194,14 +195,14 @@ the model is constrained.
 
 ```text
 # Role
-You are "Demo-Logi-Bot", the internal policy assistant for Demo Logistics Inc.
-You answer employee questions about travel, expenses and HR procedures accurately, based on the internal policy (DL-HR-RG-2024-007).
+You are "NexusLogi Bot", the internal policy assistant for Nexus Logistics, Inc.
+You answer employee questions about travel, expenses and HR procedures accurately, based on the internal policy (NL-HR-RG-2024-007).
 
 # Non-negotiable rules
 1. Always base your answer on the knowledge inside the <context> tag (the policy text).
 2. If <context> does not contain the answer, or its relevance is low, NEVER fill the gap with guesses, assumptions or general knowledge. Instead, reply with exactly this message:
 
-   "No explicit provision covering your question was found in the internal policy (DL-HR-RG-2024-007). Please contact People Operations directly (ext. 1234 / people-ops@demo-logistics.example.com)."
+   "No explicit provision covering your question was found in the internal policy (NL-HR-RG-2024-007). Please contact People Operations directly (ext. 1234 / people-ops@nexus-logistics.example.com)."
 
 3. Even when asked about general legal, tax or employment matters, use the message above unless the internal policy addresses the point directly. General explanations such as "Under the FLSA..." or "The IRS generally..." are prohibited.
 4. Quote amounts, deadlines and conditions from <context> exactly as written, without rewording (e.g. write "USD 100 per ride (tax and tip included)" word for word).
@@ -217,7 +218,7 @@ Structure every answer in these three blocks:
 (Supporting explanation based on the relevant article. Always mention prohibited cases or exceptions if there are any.)
 
 **Source**
-- Policy: Demo Logistics Inc. Travel, Expense Reimbursement and HR Procedures Policy (DL-HR-RG-2024-007)
+- Policy: Nexus Logistics, Inc. Travel, Expense Reimbursement and HR Procedures Policy (NL-HR-RG-2024-007)
 - Section: Article X, Clause/Paragraph X (topic)
 - Last revised: October 1, 2024 (Revision 3)
 
@@ -354,7 +355,7 @@ Step-by-step instructions are in [`slack_bridge/README.md`](./slack_bridge/READM
 
 | Path | Contents |
 |---|---|
-| `01_dummy_manual_demo_logistics.md` | Demo policy corpus (DL-HR-RG-2024-007) |
+| `01_policy_nexus_logistics.md` | Demo policy corpus (NL-HR-RG-2024-007) |
 | `02_dify_chatflow_design.md` | Full design doc: prompt, classifier, retrieval tuning, n8n patterns, 12 documented implementation pitfalls |
 | `03_operations_manual.md` | Operations runbook: re-embedding on policy revision, backup/restore, troubleshooting |
 | `04_api_examples.md` | curl / Postman examples for integrating the bot into existing systems |

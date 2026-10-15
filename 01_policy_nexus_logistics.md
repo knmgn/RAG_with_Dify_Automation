@@ -1,11 +1,12 @@
-# Demo Logistics Inc.
+# Nexus Logistics, Inc.
 # Travel, Expense Reimbursement and HR Procedures Policy
 
-> Document No.: DL-HR-RG-2024-007
+> Document No.: NL-HR-RG-2024-007
+> Issuer: Nexus Logistics, Inc. (a Nexus Commerce group company)
 > Established: April 1, 2021
 > Last revised: October 1, 2024 (Revision 3)
 > Policy owner: People Operations, Corporate Administration Division
-> Scope: All officers and employees of Demo Logistics Inc. and its U.S. subsidiaries (contractors and agency staff are covered by separate terms)
+> Scope: All officers and employees of Nexus Logistics, Inc. and its U.S. subsidiaries (contractors and agency staff are covered by separate terms)
 > Approved by: Chief Executive Officer
 > Revision owner: Director of People Operations
 
@@ -14,7 +15,7 @@
 ## Chapter 1 General Provisions
 
 ### Article 1 (Purpose)
-This Policy sets out the conditions under which Demo Logistics Inc. (the "Company") pays for travel and other business expenses incurred by its officers and employees, the procedures for claiming them, and the standards for benefits and HR-related procedures, so that these are administered fairly and efficiently.
+This Policy sets out the conditions under which Nexus Logistics, Inc. (the "Company") pays for travel and other business expenses incurred by its officers and employees, the procedures for claiming them, and the standards for benefits and HR-related procedures, so that these are administered fairly and efficiently.
 
 ### Article 2 (Definitions)
 The following terms are used in this Policy.
@@ -25,7 +26,7 @@ The following terms are used in this Policy.
 5. "Client present" means that a representative of an external business partner (including a prospective customer) is physically present or attending the same online meeting. Meals and meetings attended only by Company personnel are not included.
 
 ### Article 3 (Order of Precedence)
-Where this Policy conflicts with the Employee Handbook, the Business Travel Policy (DL-HR-RG-2020-003) or the Entertainment Expense Guidelines (DL-AC-RG-2022-011), **this Policy prevails for the matters it covers**. Tax treatment, however, is governed by IRS guidance and the Company's Accounting Policy.
+Where this Policy conflicts with the Employee Handbook, the Business Travel Policy (NL-HR-RG-2020-003) or the Entertainment Expense Guidelines (NL-AC-RG-2022-011), **this Policy prevails for the matters it covers**. Tax treatment, however, is governed by IRS guidance and the Company's Accounting Policy.
 
 ---
 
@@ -123,13 +124,13 @@ The following rides are not paid by the Company:
 3. For warehouse and distribution center staff, pay is calculated under the applicable alternative workweek agreement, which takes precedence over this Article.
 
 ### Article 14 (Night Shift Request Deadline)
-1. To work a night shift (a shift that includes hours after 10:00 PM), or when a manager assigns one, the request must be submitted and approved in the shift management system "Shift-DL" **by 5:00 PM on the Friday two weeks before the shift starts**.
+1. To work a night shift (a shift that includes hours after 10:00 PM), or when a manager assigns one, the request must be submitted and approved in the shift management system "Shift-NL" **by 5:00 PM on the Friday two weeks before the shift starts**.
 2. For night shifts required by emergencies or unplanned logistics work, verbal approval from the manager at least 6 hours before the shift starts, followed by entry in the system the same day, is sufficient.
 3. Night work performed without an approved request must still be recorded and is paid in full, but it is reviewed by the department head and People Operations for compliance and may result in coaching.
 
 ### Article 15 (Lost Health Insurance ID Card)
 1. If an employee loses their health insurance ID card, take the following steps promptly:
-   - **Contact: People Operations** (ext. 1234 / people-ops@demo-logistics.example.com)
+   - **Contact: People Operations** (ext. 1234 / people-ops@nexus-logistics.example.com)
    - Documents: "Replacement ID Card Request (F-031)" and a copy of photo identification
    - Also submit a "Loss Report (F-032)" briefly describing how the card was lost
 2. If the card may have been stolen, filing a police report and keeping the report number is recommended, to guard against identity misuse.
@@ -137,7 +138,7 @@ The following rides are not paid by the Company:
 4. If the card was lost together with credit cards (for example, a lost wallet), also notify the insurer's member services (1-800-XXX-XXXX) to prevent fraudulent use.
 
 ### Article 16 (Other HR Procedures)
-- Requests for bereavement leave, parental leave, FMLA leave and caregiver leave follow the separate "Leave Policy (DL-HR-RG-2019-002)", and **People Operations** is the first point of contact for all of them.
+- Requests for bereavement leave, parental leave, FMLA leave and caregiver leave follow the separate "Leave Policy (NL-HR-RG-2019-002)", and **People Operations** is the first point of contact for all of them.
 - Changes to tax withholding (Form W-4), address changes and changes in dependents are also handled through People Operations.
 
 ---
@@ -174,9 +175,9 @@ This Policy takes effect on October 1, 2024. Events that occurred before that da
 
 | Area | Team | Ext. | E-mail |
 |---|---|---|---|
-| Policy questions and HR | People Operations | 1234 | people-ops@demo-logistics.example.com |
-| Expenses and payments | Accounts Payable | 1456 | accounts-payable@demo-logistics.example.com |
-| Shifts and night work | Logistics Operations | 2210 | logistics-ops@demo-logistics.example.com |
+| Policy questions and HR | People Operations | 1234 | people-ops@nexus-logistics.example.com |
+| Expenses and payments | Accounts Payable | 1456 | accounts-payable@nexus-logistics.example.com |
+| Shifts and night work | Logistics Operations | 2210 | logistics-ops@nexus-logistics.example.com |
 
 ---
 

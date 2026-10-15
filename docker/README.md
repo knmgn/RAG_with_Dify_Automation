@@ -253,7 +253,7 @@ These are part of the delivery checklist in design doc §7.
 ## Related documents
 
 - [`../02_dify_chatflow_design.md`](../02_dify_chatflow_design.md) — design doc (§4-7 and §4-8 are the source for this setup)
-- [`../01_dummy_manual_demo_logistics.md`](../01_dummy_manual_demo_logistics.md) — the dummy policy text fed to the bot
+- [`../01_policy_nexus_logistics.md`](../01_policy_nexus_logistics.md) — the dummy policy text fed to the bot
 - [`../scripts/build_expense_template.py`](../scripts/build_expense_template.py) — xlsx regeneration script
 
 ## License

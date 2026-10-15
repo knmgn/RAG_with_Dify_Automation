@@ -10,7 +10,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "en": {
         "error": "Something went wrong while fetching the answer. Please try again in a moment.",
         "empty_question": "Please include your question in the message.",
-        "bot_label": "Demo-Logi-Bot · Automated answer based on policy DL-HR-RG-2024-007",
+        "bot_label": "NexusLogi Bot · Automated answer based on policy NL-HR-RG-2024-007",
         "sources": "Sources",
         "score": "relevance",
         "escalated_notice": "🙋 I've passed this to People Operations. A person will reply in this thread.",
@@ -33,7 +33,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "ja": {
         "error": "回答の取得中にエラーが発生しました。時間をおいて再度お試しください。",
         "empty_question": "ご質問内容をメッセージに書いてください。",
-        "bot_label": "Demo-Logi-Bot · 社内規程（DL-HR-RG-2024-007）に基づく自動回答",
+        "bot_label": "NexusLogi Bot · 社内規程（NL-HR-RG-2024-007）に基づく自動回答",
         "sources": "引用元",
         "score": "関連度",
         "escalated_notice": "🙋 この質問は人事部（People Operations）の担当者に共有しました。担当者がこのスレッドで回答します。",

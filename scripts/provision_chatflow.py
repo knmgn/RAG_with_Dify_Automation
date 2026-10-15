@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 4 — build the Dify Chatflow from code.
 
-Generates the DSL for the Demo-Logi-Bot Chatflow described in
+Generates the DSL for the NexusLogi Bot Chatflow described in
 `02_dify_chatflow_design.md` §2 and §4-7, imports it, publishes it, and writes
 the exported DSL to `dify/chatflow_dsl.yaml` as the §7 deliverable.
 
@@ -33,9 +33,9 @@ from provision_knowledge import RETRIEVAL_WEIGHTS, SCORE_THRESHOLD, TOP_K
 STATE_FILE = REPO_ROOT / "scripts" / ".provision_state.json"
 DSL_OUTPUT = REPO_ROOT / "dify" / "chatflow_dsl.yaml"
 
-APP_NAME = "Demo-Logi-Bot (Internal Policy Assistant)"
+APP_NAME = "NexusLogi Bot (Internal Policy Assistant)"
 APP_DESCRIPTION = (
-    "Answers Demo Logistics Inc. policy questions and delivers the expense report "
+    "Answers Nexus Logistics, Inc. policy questions and delivers the expense report "
     "template. Policy Q&A uses Hybrid Search with Weighted Score; file requests go "
     "through an n8n webhook."
 )
@@ -51,14 +51,14 @@ CLASS_FILE = "2"
 # The design doc's `{{#context.result#}}` is never replaced, so the model would
 # receive the literal string and answer with no knowledge at all.
 SYSTEM_PROMPT = """# Role
-You are "Demo-Logi-Bot", the internal policy assistant for Demo Logistics Inc.
-You answer employee questions about travel, expenses and HR procedures accurately, based on the internal policy (DL-HR-RG-2024-007).
+You are "NexusLogi Bot", the internal policy assistant for Nexus Logistics, Inc.
+You answer employee questions about travel, expenses and HR procedures accurately, based on the internal policy (NL-HR-RG-2024-007).
 
 # Non-negotiable rules
 1. Always base your answer on the knowledge inside the <context> tag (the policy text).
 2. If <context> does not contain the answer, or its relevance is low, NEVER fill the gap with guesses, assumptions or general knowledge. Instead, reply with exactly this message:
 
-   "No explicit provision covering your question was found in the internal policy (DL-HR-RG-2024-007). Please contact People Operations directly (ext. 1234 / people-ops@demo-logistics.example.com)."
+   "No explicit provision covering your question was found in the internal policy (NL-HR-RG-2024-007). Please contact People Operations directly (ext. 1234 / people-ops@nexus-logistics.example.com)."
 
 3. Even when asked about general legal, tax or employment matters, use the message above unless the internal policy addresses the point directly. General explanations such as "Under the FLSA..." or "The IRS generally..." are prohibited.
 4. Quote amounts, deadlines and conditions from <context> exactly as written, without rewording (e.g. write "USD 100 per ride (tax and tip included)" word for word).
@@ -74,7 +74,7 @@ Structure every answer in these three blocks:
 (Supporting explanation based on the relevant article. Always mention prohibited cases or exceptions if there are any.)
 
 **Source**
-- Policy: Demo Logistics Inc. Travel, Expense Reimbursement and HR Procedures Policy (DL-HR-RG-2024-007)
+- Policy: Nexus Logistics, Inc. Travel, Expense Reimbursement and HR Procedures Policy (NL-HR-RG-2024-007)
 - Section: Article X, Clause/Paragraph X (topic)
 - Last revised: October 1, 2024 (Revision 3)
 
@@ -151,7 +151,7 @@ Policy: {{#parse_response.regulation_ref#}}
 Contacts: People Operations (ext. 1234) / Accounts Payable (ext. 1456)"""
 
 OPENING_STATEMENT = (
-    "Hi, I'm Demo-Logi-Bot, the internal policy assistant for Demo Logistics Inc. "
+    "Hi, I'm NexusLogi Bot, the internal policy assistant for Nexus Logistics, Inc. "
     "Ask me about travel, expense reimbursement and HR procedures."
 )
 

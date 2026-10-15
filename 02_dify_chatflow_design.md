@@ -1,5 +1,5 @@
 # Dify Chatflow (Workflow Mode) & Prompt Design Document
-## Internal Policy Knowledge Bot for Demo Logistics Inc.
+## Internal Policy Knowledge Bot for Nexus Logistics, Inc.
 
 > Project code: DEMO-RAG-001
 > Design version: v1.6 (English edition for a U.S. company; v1.5 was the Japanese edition, tag `v1-ja`)
@@ -23,7 +23,7 @@
 ### The problem
 
 Travel, expense and HR policies are where "chat with your documents" bots get companies into trouble.
-The dummy policy bundled with this repository (`01_dummy_manual_demo_logistics.md`) is modeled on
+The dummy policy bundled with this repository (`01_policy_nexus_logistics.md`) is modeled on
 the real thing at a mid-sized logistics company:
 
 1. **Rules are granular and full of edge cases.** A rideshare home is reimbursed only after 11:00 PM
@@ -36,7 +36,7 @@ the real thing at a mid-sized logistics company:
    exactly the load a bot should take off them, but only if it never improvises.
 4. **Employees and policies use different words.** "How much for an Uber home?" has to find
    "rideshare and taxi fares … when work ends after 11:00 PM". Form numbers (`F-021`) and policy
-   codes (`DL-HR-RG-2024-007`) need exact matching. This is why retrieval is **hybrid**.
+   codes (`NL-HR-RG-2024-007`) need exact matching. This is why retrieval is **hybrid**.
 5. **Questions turn into tasks.** "Send me the expense template" is not a question. It should run a
    workflow, which is what **n8n** is for.
 
@@ -108,7 +108,7 @@ there are documented in §4-8.
 │  └──────────────────────────────────────────┘     │ │  ↓       │ │  │
 │                                                    │ │Switch    │ │  │
 │  Knowledge Base:                                   │ │  ↓       │ │  │
-│   - 01_dummy_manual_demo_logistics.txt             │ │Read File │ │  │
+│   - 01_policy_nexus_logistics.txt             │ │Read File │ │  │
 │     (Parent-Child, vectorized, BM25 indexed)       │ │  ↓       │ │  │
 │                                                    │ │Respond   │ │  │
 │                                                    │ └──────────┘ │  │
@@ -129,14 +129,14 @@ This is the prompt deployed by `scripts/provision_chatflow.py`, verbatim.
 
 ```text
 # Role
-You are "Demo-Logi-Bot", the internal policy assistant for Demo Logistics Inc.
-You answer employee questions about travel, expenses and HR procedures accurately, based on the internal policy (DL-HR-RG-2024-007).
+You are "NexusLogi Bot", the internal policy assistant for Nexus Logistics, Inc.
+You answer employee questions about travel, expenses and HR procedures accurately, based on the internal policy (NL-HR-RG-2024-007).
 
 # Non-negotiable rules
 1. Always base your answer on the knowledge inside the <context> tag (the policy text).
 2. If <context> does not contain the answer, or its relevance is low, NEVER fill the gap with guesses, assumptions or general knowledge. Instead, reply with exactly this message:
 
-   "No explicit provision covering your question was found in the internal policy (DL-HR-RG-2024-007). Please contact People Operations directly (ext. 1234 / people-ops@demo-logistics.example.com)."
+   "No explicit provision covering your question was found in the internal policy (NL-HR-RG-2024-007). Please contact People Operations directly (ext. 1234 / people-ops@nexus-logistics.example.com)."
 
 3. Even when asked about general legal, tax or employment matters, use the message above unless the internal policy addresses the point directly. General explanations such as "Under the FLSA..." or "The IRS generally..." are prohibited.
 4. Quote amounts, deadlines and conditions from <context> exactly as written, without rewording (e.g. write "USD 100 per ride (tax and tip included)" word for word).
@@ -152,7 +152,7 @@ Structure every answer in these three blocks:
 (Supporting explanation based on the relevant article. Always mention prohibited cases or exceptions if there are any.)
 
 **Source**
-- Policy: Demo Logistics Inc. Travel, Expense Reimbursement and HR Procedures Policy (DL-HR-RG-2024-007)
+- Policy: Nexus Logistics, Inc. Travel, Expense Reimbursement and HR Procedures Policy (NL-HR-RG-2024-007)
 - Section: Article X, Clause/Paragraph X (topic)
 - Last revised: October 1, 2024 (Revision 3)
 
@@ -275,8 +275,8 @@ message, the responsible team and the extension.
 
 > Reference: the fixed refusal message (written in the system prompt):
 > ```text
-> No explicit provision covering your question was found in the internal policy (DL-HR-RG-2024-007).
-> Please contact People Operations directly (ext. 1234 / people-ops@demo-logistics.example.com).
+> No explicit provision covering your question was found in the internal policy (NL-HR-RG-2024-007).
+> Please contact People Operations directly (ext. 1234 / people-ops@nexus-logistics.example.com).
 > ```
 
 ---
@@ -284,7 +284,7 @@ message, the responsible team and the extension.
 ## 3. Why hybrid search (Vector + Keyword) matters, and how it is designed
 
 ### 3-1. Why hybrid, in one line each
-- **Vector search alone** catches **semantically similar phrasing** such as "Uber home", "late ride", "after the last train", but is weak on **specific numbers and codes** like "F-021" and "DL-HR-RG-2024-007".
+- **Vector search alone** catches **semantically similar phrasing** such as "Uber home", "late ride", "after the last train", but is weak on **specific numbers and codes** like "F-021" and "NL-HR-RG-2024-007".
 - **Keyword search (BM25) alone** is strong on specific numbers and article numbers, but weak on colloquial variation.
 - **Combining both** makes retrieval robust to both phrasing variation and proper nouns. (A Rerank model can further re-score contextual relevance; this demo uses Weighted Score instead, see §3-3 ④.)
 
@@ -333,7 +333,7 @@ message, the responsible team and the extension.
 - **About overlap:** in Dify's Parent-Child mode **there is no overlap setting in the UI** (it appears only in General / single-chunk mode). Dify manages child-chunk overlap internally, so **nothing needs to be set** in this mode.
 - **Text Pre-processing Rules**
   - ✅ **Replace consecutive spaces, newlines and tabs**: ON (recommended)
-  - ❌ **Delete all URLs and email addresses**: **must stay OFF**. The fixed refusal cites People Operations' e-mail address (`people-ops@demo-logistics.example.com`). Turning this on deletes the contact details from the policy, and the cited "please contact People Operations" refusal no longer works.
+  - ❌ **Delete all URLs and email addresses**: **must stay OFF**. The fixed refusal cites People Operations' e-mail address (`people-ops@nexus-logistics.example.com`). Turning this on deletes the contact details from the policy, and the cited "please contact People Operations" refusal no longer works.
 
 #### ② Indexing
 - **Embedding model:** `text-embedding-3-large` (strong multilingual performance, 3072 dimensions)
@@ -347,7 +347,7 @@ The `Retrieval Setting` card in the UI offers three options. **Choose `Hybrid Se
 
 | Option | Adopted | Reason |
 |---|---|---|
-| Vector Search | ❌ | Misses specific numbers (`F-021`, `DL-HR-RG-2024-007`) and file names (`expense_template_v3.xlsx`) |
+| Vector Search | ❌ | Misses specific numbers (`F-021`, `NL-HR-RG-2024-007`) and file names (`expense_template_v3.xlsx`) |
 | Full-Text Search | ❌ | Weak on colloquial variation ("Uber home" → "rideshare … after 11:00 PM") |
 | **Hybrid Search** | ✅ | Runs Vector + Full-Text in parallel so each covers the other's weakness |
 
@@ -409,7 +409,7 @@ Knowledge screen → top-right `Metadata` button → `+ Add Metadata`, and defin
 
 | Field name | Type | Purpose |
 |---|---|---|
-| `doc_id` | string | Policy number (e.g. `DL-HR-RG-2024-007`) / audit trace |
+| `doc_id` | string | Policy number (e.g. `NL-HR-RG-2024-007`) / audit trace |
 | `doc_title` | string | Policy title (human-readable) |
 | `doc_version` | string | Version (e.g. `v3`) / filter key when old and new versions run side by side |
 | `last_revised` | string | Revision date (`YYYY-MM-DD`) / change detection for Phase 4 automatic re-embedding |
@@ -424,7 +424,7 @@ Knowledge screen → top-right `Metadata` button → `+ Add Metadata`, and defin
 
 ```json
 {
-  "doc_id": "DL-HR-RG-2024-007",
+  "doc_id": "NL-HR-RG-2024-007",
   "doc_title": "Travel, Expense Reimbursement and HR Procedures Policy",
   "doc_version": "v3",
   "last_revised": "2024-10-01",
@@ -458,7 +458,7 @@ Turning **ON** the `Built-in` toggle at the bottom of the Metadata screen gives 
 | Phase 4 (automatic re-embedding) | Change detection via `last_revised` |
 | Audit requirement (record which version an answer referenced) | Keep `doc_id` + `doc_version` in the answer log |
 
-> Citations are designed to be extracted by the LLM from the **policy text header** ("Document No.: DL-HR-RG-2024-007"), not from metadata, so citations work even without metadata.
+> Citations are designed to be extracted by the LLM from the **policy text header** ("Document No.: NL-HR-RG-2024-007"), not from metadata, so citations work even without metadata.
 
 ### 3-4. Test queries for verification (10)
 Check Recall@4 with these queries before any production release.
@@ -515,7 +515,7 @@ When node ② Question Classifier assigns **"Class 2: file request"**, the follo
 | Item | Value |
 |---|---|
 | Method | POST |
-| URL | `https://n8n.demo-logistics.example.com/webhook/expense-template` |
+| URL | `https://n8n.nexus-logistics.example.com/webhook/expense-template` |
 | Header | `Content-Type: application/json` |
 | Header | `X-Auth-Token: {{#env.N8N_WEBHOOK_TOKEN#}}` |
 | Body (JSON) | See below |
@@ -558,7 +558,7 @@ Your expense report template is ready. A download link has been sent to you on S
 - Macros must be enabled (Article 9, Paragraph 4)
 
 **Source**
-Policy: DL-HR-RG-2024-007 Articles 8 and 9
+Policy: NL-HR-RG-2024-007 Articles 8 and 9
 ```
 
 ---
@@ -625,7 +625,7 @@ Policy: DL-HR-RG-2024-007 Articles 8 and 9
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": "*File:* expense_template_v3.xlsx\n*Deadline:* 5:00 PM on the 25th of each month\n*Policy:* DL-HR-RG-2024-007 Articles 8 and 9"
+        "text": "*File:* expense_template_v3.xlsx\n*Deadline:* 5:00 PM on the 25th of each month\n*Policy:* NL-HR-RG-2024-007 Articles 8 and 9"
       }
     },
     {
@@ -640,7 +640,7 @@ Policy: DL-HR-RG-2024-007 Articles 8 and 9
         {
           "type": "button",
           "text": { "type": "plain_text", "text": "View policy" },
-          "url": "https://drive.example.com/policies/DL-HR-RG-2024-007.pdf"
+          "url": "https://drive.example.com/policies/NL-HR-RG-2024-007.pdf"
         }
       ]
     },
@@ -649,7 +649,7 @@ Policy: DL-HR-RG-2024-007 Articles 8 and 9
       "elements": [
         {
           "type": "mrkdwn",
-          "text": ":robot_face: Sent automatically by Demo-Logi-Bot | Questions: People Operations (ext. 1234)"
+          "text": ":robot_face: Sent automatically by NexusLogi Bot | Questions: People Operations (ext. 1234)"
         }
       ]
     }
@@ -682,7 +682,7 @@ Before building n8n, Slack and per-user resolution, or for small deployments, a 
 
 1. Upload `expense_template_v3.xlsx` to the internal shared drive (e.g. the `02_People_Operations` folder).
 2. Right-click the file → "Share" → change to **"Anyone with the link"** and set the permission to **"Viewer"**.
-   - For internal use only, it is better to restrict it to "anyone in the organization's domain with the link (demo-logistics.example.com)".
+   - For internal use only, it is better to restrict it to "anyone in the organization's domain with the link (nexus-logistics.example.com)".
 3. Register the URL from "Copy link" (e.g. `https://drive.google.com/file/d/1aBcDEFghiJKLmnOPqrSTuvWxyz0123456/view?usp=sharing`) as the Dify environment variable `EXPENSE_TEMPLATE_URL`.
 
 > Note: "anyone with the link" security relies on the File ID being hard to guess. It is not suitable for truly confidential files. This template is a blank form with no sensitive information, so this approach is acceptable.
@@ -719,7 +719,7 @@ You can download the expense report template from this Google Drive link.
 - Rides above USD 100 require the Excess Justification Form F-021 (Article 5, Clause 4)
 
 **Source**
-Policy: DL-HR-RG-2024-007 Articles 8 and 9
+Policy: NL-HR-RG-2024-007 Articles 8 and 9
 Contacts: People Operations (ext. 1234) / Accounts Payable (ext. 1456)
 ```
 
@@ -744,7 +744,7 @@ Add the following under `Settings ➔ Environment Variables`:
 
 #### ⑤ Dummy file `expense_template_v3.xlsx` (included in this repository)
 
-The repository's `expense_template_v3.xlsx` complies with policy DL-HR-RG-2024-007 and contains the following. In the demo video you can actually upload it to Drive and record the bot returning the link.
+The repository's `expense_template_v3.xlsx` complies with policy NL-HR-RG-2024-007 and contains the following. In the demo video you can actually upload it to Drive and record the bot returning the link.
 
 - "Expense Report" sheet: employee header, 9 sample line items (rail, air, day and late-night rideshare, lodging, client entertainment, supplies), automatic totals with SUM formulas in USD, cash-advance deduction, a five-person approval block, F-021 / F-007 notes
 - "Rideshare Log" sheet: pickup and drop-off times and locations and F-021 status, per Article 5
@@ -840,7 +840,7 @@ owners "your data never leaves the building" and mean it, it is the recommended 
   "filename": "expense_template_v3.xlsx",
   "download_url": "http://localhost:5678/webhook/files/expense-v3",
   "message": "Here is the expense report template. Download it from the link below.",
-  "regulation_ref": "DL-HR-RG-2024-007 Articles 8 and 9",
+  "regulation_ref": "NL-HR-RG-2024-007 Articles 8 and 9",
   "deadline": "Must be received by 5:00 PM on the 25th of each month",
   "macro_warning": "Macros must be enabled (Article 9, Paragraph 4)"
 }
@@ -1242,7 +1242,7 @@ Measured (Full-Text Search alone, Top K=5):
 | Query | Hits |
 |---|---|
 | `F-021` | 3 |
-| `DL-HR-RG-2024-007` | 5 |
+| `NL-HR-RG-2024-007` | 5 |
 | `タクシー` (taxi) | **0** |
 
 This is not a defect; it matches the division of labor in §3-1. What BM25 is expected to do is
@@ -1405,7 +1405,7 @@ python3 scripts/test_e2e.py     # confirm 3/3 PASS before recording
 
 ### Common (all setups)
 - [x] Dify Chatflow DSL (YAML export) → `dify/chatflow_dsl.yaml` (secrets excluded)
-- [x] Source policy for the knowledge base → `01_dummy_manual_demo_logistics.md` (converted to `.txt` at upload, §4-8 ⑥)
+- [x] Source policy for the knowledge base → `01_policy_nexus_logistics.md` (converted to `.txt` at upload, §4-8 ⑥)
 - [x] n8n workflows (JSON export) → `docker/n8n/workflows/` (both Workflow 1 and 2, PII removed)
 - [x] Environment variable list → `scripts/.dify_admin.env.example`
 - [x] Operations manual → `03_operations_manual.md` (re-embedding / xlsx update / backup / first-line triage)

@@ -82,10 +82,10 @@ curl -s -X POST "$DIFY_BASE/v1/chat-messages" \
       {
         "position": 1,
         "dataset_name": "Internal Policy Knowledge",
-        "document_name": "DL-HR-RG-2024-007_Travel_Expense_and_HR_Procedures_Policy.txt",
+        "document_name": "NL-HR-RG-2024-007_Travel_Expense_and_HR_Procedures_Policy.txt",
         "score": 0.6438,
         "content": "Article 5 (Late-Night Rideshare and Taxi)…",
-        "doc_metadata": { "doc_id": "DL-HR-RG-2024-007", "doc_version": "v3", "…": "…" }
+        "doc_metadata": { "doc_id": "NL-HR-RG-2024-007", "doc_version": "v3", "…": "…" }
       }
     ]
   },
@@ -218,7 +218,7 @@ http://localhost:5678/webhook/files/expense-v3
 - Macros must be enabled (Article 9, Paragraph 4)
 
 **Source**
-Policy: DL-HR-RG-2024-007 Articles 8 and 9
+Policy: NL-HR-RG-2024-007 Articles 8 and 9
 Contacts: People Operations (ext. 1234) / Accounts Payable (ext. 1456)
 ```
 
@@ -254,7 +254,7 @@ curl -s -X POST "http://localhost:5678/webhook/$DISPATCHER_PATH" \
   "filename": "expense_template_v3.xlsx",
   "download_url": "http://localhost:5678/webhook/files/expense-v3",
   "message": "Here is the expense report template. Download it from the link below.",
-  "regulation_ref": "DL-HR-RG-2024-007 Articles 8 and 9",
+  "regulation_ref": "NL-HR-RG-2024-007 Articles 8 and 9",
   "deadline": "Must be received by 5:00 PM on the 25th of each month",
   "macro_warning": "Macros must be enabled (Article 9, Paragraph 4)"
 }

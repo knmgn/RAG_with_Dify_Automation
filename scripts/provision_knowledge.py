@@ -26,12 +26,12 @@ from typing import Any
 from dify_console import REPO_ROOT, DifyConsole, DifyError, connect, load_env
 
 STATE_FILE = REPO_ROOT / "scripts" / ".provision_state.json"
-SOURCE_DOCUMENT = REPO_ROOT / "01_dummy_manual_demo_logistics.md"
+SOURCE_DOCUMENT = REPO_ROOT / "01_policy_nexus_logistics.md"
 
 DATASET_NAME = "Internal Policy Knowledge"
 DATASET_DESCRIPTION = (
-    "Demo Logistics Inc. Travel, Expense Reimbursement and HR Procedures Policy "
-    "(DL-HR-RG-2024-007, Revision 3). Hybrid Search with Weighted Score ranking."
+    "Nexus Logistics, Inc. Travel, Expense Reimbursement and HR Procedures Policy "
+    "(NL-HR-RG-2024-007, Revision 3). Hybrid Search with Weighted Score ranking."
 )
 
 EMBEDDING_PROVIDER = "langgenius/openai/openai"
@@ -95,7 +95,7 @@ SCORE_THRESHOLD = 0.3
 
 # §3-3 ⑥ Step 1 — schema, and Step 2 — the values for this one document.
 METADATA_FIELDS: dict[str, str] = {
-    "doc_id": "DL-HR-RG-2024-007",
+    "doc_id": "NL-HR-RG-2024-007",
     "doc_title": "Travel, Expense Reimbursement and HR Procedures Policy",
     "doc_version": "v3",
     "last_revised": "2024-10-01",
@@ -125,7 +125,7 @@ RETRIEVAL_MODEL: dict[str, Any] = {
 }
 
 
-UPLOAD_FILENAME = "DL-HR-RG-2024-007_Travel_Expense_and_HR_Procedures_Policy.txt"
+UPLOAD_FILENAME = "NL-HR-RG-2024-007_Travel_Expense_and_HR_Procedures_Policy.txt"
 
 
 def log(message: str) -> None:
