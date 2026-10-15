@@ -9,3 +9,6 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Slack bridge
+slack_bridge/.env

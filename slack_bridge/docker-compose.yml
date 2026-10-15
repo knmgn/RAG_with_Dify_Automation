@@ -1,0 +1,34 @@
+# Slack front end for Demo-Logi-Bot (Socket Mode bridge → Dify Service API)
+#
+# Setup:
+#   1. Create the Slack app from manifest.yaml and fill in .env:
+#        cp .env.example .env
+#   2. The shared network must exist (created once by ../docker/README.md):
+#        docker network create demo-rag-net
+#   3. From this directory:
+#        docker compose up -d --build
+#
+# Notes:
+#   - No ports are published. Socket Mode is an outbound WebSocket to Slack,
+#     so nothing on this host has to be reachable from the internet.
+#   - The bridge reaches Dify's api container by its compose service name `api`
+#     on demo-rag-net (docker/dify/docker-compose.override.yaml puts it there).
+#     It calls the Service API directly, not through nginx.
+
+services:
+  slack_bridge:
+    build: .
+    container_name: slack_bridge
+    env_file: .env
+    volumes:
+      - bridge_data:/data
+    restart: unless-stopped
+    networks:
+      - demo-rag-net
+
+volumes:
+  bridge_data:
+
+networks:
+  demo-rag-net:
+    external: true
