@@ -12,20 +12,20 @@ sequenceDiagram
     participant S as Slack
     participant B as slack_bridge<br/>(Socket Mode)
     participant D as Dify Chatflow
-    actor O as Policy owner<br/>(General Affairs)
+    actor O as Policy owner<br/>(People Operations)
 
-    E->>S: @Demo-Logi-Bot 深夜帰りのタクシー代いくら？
+    E->>S: @Demo-Logi-Bot How much can I claim for a late-night ride home?
     S-->>B: app_mention (over outbound WebSocket)
     B->>D: POST /v1/chat-messages (conversation per thread)
     D-->>B: answer + retriever_resources
-    B->>S: threaded reply + sources (第5条 · relevance 0.64)
+    B->>S: threaded reply + sources (Article 5 · relevance score)
 
-    E->>S: @Demo-Logi-Bot 猫を飼ったら手当出る？
+    E->>S: @Demo-Logi-Bot Do I get an allowance if I adopt a cat?
     S-->>B: app_mention
     B->>D: POST /v1/chat-messages
     D-->>B: fixed refusal (guardrail fired)
     B->>S: escalation card → owner channel
-    B->>S: refusal + "passed to General Affairs" in the thread
+    B->>S: refusal + "passed to People Operations" in the thread
     O->>S: clicks "Reply in thread", writes answer
     S-->>B: view_submission
     B->>S: owner's answer in the employee's thread, under the owner's name and photo
@@ -48,7 +48,7 @@ and the policy text sent to the LLM still goes only to OpenAI.
 |---|---|
 | Channel questions | `@Demo-Logi-Bot <question>`. The reply goes in the thread |
 | Direct messages | Any DM to the bot is a question |
-| Follow-ups | One Slack thread = one Dify conversation, so "それって領収書いる？" (*do I need a receipt for that?*) keeps the context. Mapping persisted in SQLite |
+| Follow-ups | One Slack thread = one Dify conversation, so "Do I need a receipt for that?" keeps the context. Mapping persisted in SQLite |
 | Sources | Each retrieved article is listed once with its relevance score. Never shown on a refusal |
 | Progress | ⏳ reaction while Dify is answering, removed when done |
 | Human escalation | Refusals post a card to `SLACK_ESCALATION_CHANNEL`. The employee is told a person will reply **only if the card was actually posted** |
@@ -106,7 +106,7 @@ and no third-party packages.
 | `dify_client.py` | Dify Service API client (standard library only) |
 | `formatting.py` | Block Kit builders, mrkdwn escaping, message splitting |
 | `store.py` | SQLite state: thread → conversation, escalations |
-| `messages.py` | Bridge UI strings in Japanese and English (`UI_LANGUAGE`) |
+| `messages.py` | Bridge UI strings in English (default) and Japanese (`UI_LANGUAGE`) |
 | `config.py` | Environment variable loading and validation |
 | `manifest.yaml` | Slack app manifest (scopes, events, Socket Mode) |
 | `docker-compose.yml`, `Dockerfile` | Container on `demo-rag-net`, no published ports |

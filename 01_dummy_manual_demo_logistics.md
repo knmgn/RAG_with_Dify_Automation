@@ -1,183 +1,183 @@
-# 株式会社デモ・ロジスティクス
-# 旅費交通費・経費精算および労務手続き規定
+# Demo Logistics Inc.
+# Travel, Expense Reimbursement and HR Procedures Policy
 
-> 文書番号：DL-HR-RG-2024-007
-> 制定日：2021年4月1日
-> 最終改訂：2024年10月1日（第3版）
-> 管掌部門：管理本部 総務部
-> 適用範囲：株式会社デモ・ロジスティクスおよび国内連結子会社の全役職員（業務委託・派遣社員は別途規定）
-> 承認者：代表取締役社長 山田 太郎
-> 改訂責任者：総務部長 佐藤 健一
-
----
-
-## 第1章　総則
-
-### 第1条（目的）
-本規定は、株式会社デモ・ロジスティクス（以下「当社」という）の役職員が業務遂行上必要となる旅費交通費および各種経費を会社負担とする場合の支給要件、申請手続、ならびに福利厚生および労務関連の各種手続きに関する基準を定め、もって公正かつ効率的な運用を図ることを目的とする。
-
-### 第2条（用語の定義）
-本規定における用語の定義は次のとおりとする。
-1. 「実費精算」とは、領収書・利用明細書・電子レシート（PDFまたは画像）等の客観的証憑をもって金額を確定し、支給する方式をいう。
-2. 「概算払い」とは、出張等に先立ち見込額を仮払いし、帰着後5営業日以内に実費精算をもって清算する方式をいう。
-3. 「事前申請」とは、対象行為の発生日の**前々営業日17:00まで**にワークフローシステム「Coconala-Flow」上で承認を完了させていることをいう。
-4. 「営業日」とは、土日祝日および年末年始（12月29日〜1月3日）を除いた当社の通常業務日をいう。
-5. 「クライアント同席」とは、社外の取引先担当者（見込み顧客を含む）が物理的または同一オンライン会議に在席している状態をいい、社内関係者のみの会食・打合せは含まない。
-
-### 第3条（規定の優先順位）
-本規定は、就業規則、出張旅費規定（DL-HR-RG-2020-003）、および交際費取扱要領（DL-AC-RG-2022-011）と矛盾する箇所がある場合、**当該事項に関しては本規定を優先する**。ただし、税務上の取扱いについては国税庁通達および当社経理規定を最終的な拠り所とする。
+> Document No.: DL-HR-RG-2024-007
+> Established: April 1, 2021
+> Last revised: October 1, 2024 (Revision 3)
+> Policy owner: People Operations, Corporate Administration Division
+> Scope: All officers and employees of Demo Logistics Inc. and its U.S. subsidiaries (contractors and agency staff are covered by separate terms)
+> Approved by: Chief Executive Officer
+> Revision owner: Director of People Operations
 
 ---
 
-## 第2章　旅費交通費規定
+## Chapter 1 General Provisions
 
-### 第4条（公共交通機関の利用原則）
-1. 業務上の移動は、原則として公共交通機関（鉄道・バス・地下鉄）の**経済的経路かつ最短時間経路**を利用する。
-2. 新幹線については、片道**営業距離100km以上**の移動に限り普通車指定席を支給する。グリーン車は次の各号のいずれかに該当する場合に限り認める。
-   - 役員待遇者（部長職以上）が利用する場合
-   - 片道乗車時間が3時間を超え、かつ乗車中に資料作成等の業務遂行を予定している場合（事前申請かつ業務内容の記載必須）
-   - クライアントを伴っての同行移動で、クライアントがグリーン車を利用する場合
-3. 飛行機の利用は片道300km以上、または鉄道利用と比較して**合計移動時間が2時間以上短縮**できる場合に限る。座席クラスは原則エコノミー（国内線・国際線とも）。ビジネスクラスは片道飛行時間6時間以上の国際線出張に限り、部長以上の承認をもって認める。
+### Article 1 (Purpose)
+This Policy sets out the conditions under which Demo Logistics Inc. (the "Company") pays for travel and other business expenses incurred by its officers and employees, the procedures for claiming them, and the standards for benefits and HR-related procedures, so that these are administered fairly and efficiently.
 
-### 第5条（タクシー代の支給要件）
-タクシー代の会社負担は、次の各号のいずれかに該当し、かつ本条第3項の手続きを履行した場合に限る。
+### Article 2 (Definitions)
+The following terms are used in this Policy.
+1. "Actual-expense reimbursement" means reimbursement of an amount established by objective evidence such as receipts, itemized statements or e-receipts (PDF or image).
+2. "Cash advance" means an estimated amount paid before a business trip, settled against actual expenses within 5 business days after return.
+3. "Pre-approval" means approval completed in the workflow system "FlowDesk" **by 5:00 PM two business days before** the date of the activity.
+4. "Business day" means a normal working day of the Company, excluding weekends and the holidays listed in the Company holiday calendar.
+5. "Client present" means that a representative of an external business partner (including a prospective customer) is physically present or attending the same online meeting. Meals and meetings attended only by Company personnel are not included.
 
-#### 第1項（夜間帰宅の場合）
-- 原則として**業務終了時刻が23:00を超え**、かつ最寄り公共交通機関の終電に間に合わない場合に支給する。
-- 23:00以前であっても、最終電車終了後の帰宅となる路線（例：終電22:45の路線で22:50業務終了）については例外的に認める。この場合、当該路線の終電時刻を証憑として「乗換案内アプリのスクリーンショット」を添付すること。
-- 上限は**1回あたり15,000円（消費税込）**。これを超える場合は自己負担とし、超過分について会社負担を希望する場合は次条の「超過理由書」を提出すること。
-
-#### 第2項（昼間・クライアント関連の場合）
-- 昼間（5:00〜23:00）のタクシー利用は、原則として認めない。ただし次のいずれかに該当する場合に限り例外として認める。
-  - **クライアント同席**による移動（送迎を含む）であり、かつ事前申請が完了している場合
-  - 重量物（おおむね10kg以上）または機密性の高い物品（契約書原本、サンプル品等）を運搬する必要があり、公共交通機関での運搬がセキュリティ上または物理的に困難であると上長が認めた場合
-  - 体調不良・天災・公共交通機関の重大遅延（30分以上）等の不可抗力により業務継続のためにやむを得ない場合（事後申請可。ただし48時間以内に証憑を添えて申請すること）
-- 上限は同じく**1回あたり15,000円**。
-
-#### 第3項（手続）
-1. 領収書（タクシーメーターレシート、または電子決済明細のスクリーンショット）の添付を必須とする。手書き領収書は乗務員氏名・営業所名・登録番号の記載があるもののみ有効。
-2. 利用区間（乗車地点／降車地点）、利用日時、利用目的を「経費精算テンプレート_v3.xlsx」の所定欄に記入すること。
-3. 同一案件で複数人がタクシー相乗りする場合、立替者1名がまとめて精算し、同乗者氏名を備考欄に明記する（割り勘精算は不可）。
-
-#### 第4項（超過理由書）
-- 1回15,000円の上限を超えるタクシー代を会社負担として申請する場合、別途「タクシー代超過利用理由書（フォーマット：02_総務部 ➔ 様式集 ➔ F-021_タクシー超過理由書.docx）」を提出し、所属部長および総務部長の二者承認を得ること。
-- 超過理由書の提出期限は**利用日の翌々営業日17:00**までとする。これを過ぎた申請は原則却下とし、全額自己負担となる。
-
-#### 第5項（NG事例）
-次に掲げる利用は会社負担として認めない。
-- 私的飲食を伴う会合後（社内懇親会・有志飲み会等）の帰宅
-- 自宅から最寄り駅までのタクシー利用（雨天等の天候を理由とするものを含む）
-- 出張先における観光・私用目的が混在する移動
-- 同居家族・友人を同乗させた区間（按分計算は認めない、全額自己負担）
-
-### 第6条（自家用車の業務利用）
-1. やむを得ず自家用車を業務利用する場合は、事前に「自家用車業務利用申請書（F-015）」を提出し、自動車保険（対人無制限・対物1,000万円以上・人身傷害特約付）の付保証明を添付すること。
-2. 燃料費は走行距離に応じ、**1kmあたり25円**を支給する（高速代は実費別途）。
-3. 駐車違反・速度超過等の交通違反金は一切支給しない。
-
-### 第7条（宿泊費の上限）
-1. 宿泊を伴う出張は次の地域区分により上限を定める。
-   - 東京23区／大阪市／名古屋市／福岡市／札幌市：1泊**13,000円**
-   - その他政令指定都市：1泊**11,000円**
-   - 上記以外の国内地域：1泊**9,500円**
-   - 海外（主要都市）：1泊**22,000円**（部長承認により上限**30,000円**まで可）
-2. 朝食付きプランの場合、朝食相当額として一律700円を控除する（領収書に内訳が明記されている場合は実額控除）。
+### Article 3 (Order of Precedence)
+Where this Policy conflicts with the Employee Handbook, the Business Travel Policy (DL-HR-RG-2020-003) or the Entertainment Expense Guidelines (DL-AC-RG-2022-011), **this Policy prevails for the matters it covers**. Tax treatment, however, is governed by IRS guidance and the Company's Accounting Policy.
 
 ---
 
-## 第3章　経費精算の手続き
+## Chapter 2 Travel and Transportation
 
-### 第8条（提出期限）
-1. 経費精算書の提出期限は、**毎月25日17:00必着**とする（必着の定義：「Coconala-Flow」上で当該月の精算申請ステータスが『部門承認待ち』以降に到達していること）。
-2. 25日が土日祝日にあたる場合は、**直前の営業日**に繰り上げる。
-3. 期限を過ぎた申請は、原則として**翌々月精算**となる。例：5月20日の利用を6月26日に申請した場合、支給は7月25日の給与振込日となる。
-4. 翌々月精算に該当する申請を行う場合は、「経費精算遅延始末書（F-007）」を添付し、所属部長の承認を得ること。年度内に同一従業員が3回以上遅延した場合、人事考課のコンピテンシー評価において減点対象とする。
+### Article 4 (Public Transportation and Travel Class)
+1. Business travel must, as a rule, use public transportation (rail, bus, subway) by the **most economical route that is also the fastest**.
+2. Intercity rail (e.g. Amtrak) is reimbursed in coach class for one-way trips of **100 miles or more**. Business class rail is permitted only in one of the following cases:
+   - The traveler is Director level or above
+   - The one-way ride exceeds 3 hours and the traveler plans to work during the ride (pre-approval with a description of the work is required)
+   - The traveler is accompanying a client who is traveling in business class
+3. Air travel is permitted only for one-way trips of 300 miles or more, or where it **shortens total travel time by 2 hours or more** compared with rail. Seats are economy class as a rule (domestic and international). Business class is permitted only on international trips with a one-way flight time of 6 hours or more, with approval from a Director or above.
 
-### 第9条（フォーマット）
-1. 経費精算は必ず当社指定フォーマット「**経費精算テンプレート_v3.xlsx**」を使用すること。
-2. 保管場所：**社内共有ドライブ ➔ 02_総務部 ➔ 経費精算テンプレート_v3.xlsx**
-3. v2以前の旧フォーマットでの申請は受理しない（自動で差し戻す）。
-4. テンプレート内のマクロは必ず有効化すること。マクロが無効の状態で送信した場合、計算式が破損する恐れがあるため、無効化された状態で提出されたものは差し戻し対象とする。
+### Article 5 (Late-Night Rideshare and Taxi)
+Rideshare and taxi fares are paid by the Company only when one of the following clauses applies and the procedure in Clause 3 of this Article has been followed.
 
-### 第10条（証憑の添付）
-1. 1件3,000円以上の経費には**原則として原本領収書**の提出を必須とする。電子レシート（PDF・JPEG）も可。
-2. 1件3,000円未満については、利用日・店舗名・金額・利用目的が判別できる**電子明細のスクリーンショット**で代替可。
-3. 飲食を伴う経費には、参加者全員の氏名・所属（社外の場合は会社名・役職）を明記すること。1人あたり**5,000円**を超える接待については、別途「交際費事前申請書（F-009）」が必要。
+#### Clause 1 (Late-Night Ride Home)
+- As a rule, a ride home is reimbursed when **work ends after 11:00 PM** and the employee cannot make the last public transit service from the nearest station.
+- A ride before 11:00 PM is allowed as an exception when the last service on the employee's route has already left (example: work ends at 10:50 PM on a route whose last train leaves at 10:45 PM). In this case, attach a screenshot of a transit app showing the last departure time as evidence.
+- The cap is **USD 100 per ride (tax and tip included)**. Any amount above the cap is paid by the employee. To request that the Company pay the excess, submit the Excess Justification Form described in Clause 4.
 
-### 第11条（差し戻しと再申請）
-1. 経理部門の確認において不備があった場合、差し戻しは「Coconala-Flow」上で行う。
-2. 差し戻し通知から**3営業日以内**に修正再申請が必要。これを過ぎた場合は翌月以降の処理に繰り越され、第8条第3項の遅延扱いとなる。
+#### Clause 2 (Daytime and Client-Related Rides)
+- Rideshare and taxi use during the day (5:00 AM to 11:00 PM) is not permitted as a rule. It is permitted as an exception only in the following cases:
+  - Travel **with a client present** (including picking up or dropping off a client), with pre-approval completed
+  - Carrying heavy items (roughly 22 lb / 10 kg or more) or highly confidential items (original contracts, product samples, etc.) where the manager agrees that public transportation is impractical or insecure
+  - Unavoidable circumstances such as illness, severe weather or a major public transit delay (30 minutes or more) where the ride is needed to continue working (may be requested after the fact, with evidence, within 48 hours)
+- The cap is likewise **USD 100 per ride**.
 
-### 第12条（仮払い）
-1. 出張等で立替が困難な場合、出発の5営業日前までに「仮払申請書（F-011）」にて申請する。
-2. 帰着後5営業日以内に実費精算をもって清算し、差額は速やかに返金または追加支給する。
-3. 清算が遅延した場合、当該従業員は次回以降の仮払い申請権を6ヶ月間停止する。
+#### Clause 3 (Procedure)
+1. A receipt is mandatory (the rideshare app's itemized receipt or the taxi meter receipt). Handwritten receipts are valid only if they show the driver's name, the cab company and the vehicle license number.
+2. Enter the pickup and drop-off locations, date and time, and business purpose in the designated fields of "expense_template_v3.xlsx".
+3. When several employees share a ride for the same business purpose, one person pays and claims the full fare, listing the other riders in the notes field (splitting the fare between claims is not permitted).
 
----
+#### Clause 4 (Excess Justification Form)
+- To claim a fare above the USD 100 per-ride cap, submit the "Excess Justification Form (Shared Drive ➔ 02_People_Operations ➔ Forms ➔ F-021_Excess_Ride_Justification.docx)" and obtain approval from both the employee's department head and the Director of People Operations.
+- The form must be submitted **by 5:00 PM two business days after the ride**. Late forms are rejected as a rule, and the full fare is paid by the employee.
 
-## 第4章　福利厚生・労務手続き
+#### Clause 5 (Not Reimbursable)
+The following rides are not paid by the Company:
+- Rides home after social gatherings that include personal food or drink (team happy hours, voluntary get-togethers, etc.)
+- Rides between home and the nearest station (including on account of bad weather)
+- Rides that combine business with sightseeing or personal errands at a travel destination
+- Any part of a ride shared with family members or friends (no pro-rating; the full fare is paid by the employee)
 
-### 第13条（夜勤手当）
-1. 夜勤手当は、所定就業時間外の22:00〜翌5:00の時間帯において業務を遂行した場合に支給する。
-2. 単価は基本時給の**25%増し**（深夜割増、労働基準法第37条準拠）に加え、当社独自加算として**1勤務あたり一律1,500円**の「深夜業務加算金」を支給する。
-3. 倉庫部門・配送センター勤務者については、別途「変形労働時間制協定」に基づき計算するため、本条の規定に優先する。
+### Article 6 (Business Use of a Personal Vehicle)
+1. When a personal vehicle must be used for business, submit the "Personal Vehicle Business Use Request (F-015)" in advance, with proof of auto insurance (bodily injury liability of at least USD 100,000 per person / USD 300,000 per accident, and property damage liability of at least USD 100,000).
+2. Mileage is reimbursed at **USD 0.67 per mile** (tolls and parking are reimbursed separately at cost).
+3. Parking tickets, speeding tickets and other traffic fines are never reimbursed.
 
-### 第14条（深夜シフトの申請期日）
-1. 深夜シフト（22:00以降を含むシフト）への入りを希望する場合、または管理者が割当てる場合、**当該シフト開始日の前々週金曜日17:00まで**にシフト管理システム「Shift-DL」にて申請・承認を完了させること。
-2. 緊急対応・突発的な物流案件に伴う深夜シフトについては、開始6時間前までに上長口頭承認＋同日中のシステム入力で可とする。
-3. 申請を伴わない深夜業務は、原則として時間外労働として計上されず（労務リスク管理の観点）、所属部長・人事部の指導対象となる。
-
-### 第15条（健康保険証の紛失時の手続き）
-1. 健康保険被保険者証（以下「保険証」という）を紛失した場合、速やかに次の手続きを行うこと。
-   - **窓口：総務部 佐藤 健一**（内線：1234／メール：sato.kenichi@demo-logistics.example.co.jp）
-   - 提出書類：「健康保険被保険者証 再交付申請書（F-031）」、本人確認書類のコピー
-   - 紛失の経緯を簡潔に記載した「紛失届出書（F-032）」を併せて提出
-2. 警察への遺失届提出後、受理番号を控えること（個人情報漏洩リスクへの対応として推奨）。
-3. 再交付までの目安期間は**申請受理後10〜14営業日**。緊急で医療機関を受診する必要がある場合、総務部にて「健康保険被保険者資格証明書」を発行できる場合があるため、即日相談すること。
-4. クレジットカード等と同時紛失（財布ごと紛失等）の場合、不正利用防止のため、保険組合への連絡（協会けんぽ：03-XXXX-XXXX）も併せて行うこと。
-
-### 第16条（その他の労務手続き）
-- 慶弔休暇／産前産後休暇／育児休業／介護休業の申請は、別途定める「休暇取扱規程（DL-HR-RG-2019-002）」によるが、いずれも**総務部 佐藤宛**を一次窓口とする。
-- マイナンバー関連、年末調整、住所変更、扶養家族の異動についても、全て総務部 佐藤を経由すること。
-
----
-
-## 第5章　雑則
-
-### 第17条（不正の発覚）
-水増し請求・架空計上・私用混在の意図的隠蔽等の不正が発覚した場合、就業規則第48条（懲戒）に基づき厳正に対処する。発覚した経費は全額返還を求めるとともに、悪質な場合は法的措置を講じる。
-
-### 第18条（軽微な疑義の取扱い）
-本規定の解釈に疑義が生じた場合、まずは所属長を経由して総務部へ照会する。総務部の判断が最終とする。
-
-### 第19条（改訂）
-本規定の改訂は経営会議の決議を経て行う。改訂の都度、社内共有ドライブの「01_規程集」配下に最新版を掲示し、全従業員にメールおよび社内ポータルで通知する。
-
-### 第20条（附則）
-本規定は2024年10月1日より施行する。施行日前に発生した事象については旧規定（第2版）を適用する。
+### Article 7 (Lodging Caps)
+1. Lodging on business trips is capped by location as follows:
+   - New York City / San Francisco / Boston / Washington, D.C. / Los Angeles: **USD 300** per night
+   - Other major metropolitan areas (Chicago, Seattle, Atlanta, Dallas, Miami, etc.): **USD 220** per night
+   - All other U.S. locations: **USD 160** per night
+   - International (major cities): **USD 350** per night (up to **USD 450** with Director approval)
+2. For rates that include breakfast, a flat USD 15 is deducted as the value of breakfast (the actual amount is deducted if it is itemized on the receipt).
 
 ---
 
-## 別表1：申請フォーマット一覧（抜粋）
+## Chapter 3 Expense Reimbursement Procedures
 
-| 様式番号 | 名称 | 保管場所 | 提出先 |
+### Article 8 (Submission Deadline)
+1. Expense reports must be **received by 5:00 PM on the 25th of each month** (received means the month's expense report has reached the status "Pending Department Approval" or later in "FlowDesk").
+2. If the 25th falls on a weekend or holiday, the deadline moves **forward to the preceding business day**.
+3. Late reports are, as a rule, **reimbursed in the month after next**. Example: an expense incurred on May 20 and submitted on June 26 is reimbursed with the July 25 payroll.
+4. A report reimbursed in the month after next must include a "Late Submission Explanation (F-007)" approved by the employee's department head. An employee who submits late three or more times in a fiscal year receives a deduction in the competency section of the performance review.
+
+### Article 9 (Template)
+1. Expense reports must use the Company template "**expense_template_v3.xlsx**".
+2. Location: **Shared Drive ➔ 02_People_Operations ➔ expense_template_v3.xlsx**
+3. Reports on v2 or older templates are not accepted (they are returned automatically).
+4. Macros in the template must be enabled. Submitting with macros disabled can corrupt the formulas, so reports submitted with macros disabled are returned.
+
+### Article 10 (Receipts)
+1. For any expense of **USD 25 or more**, an itemized receipt is required as a rule. E-receipts (PDF, JPEG) are accepted.
+2. For expenses under USD 25, a **screenshot of the electronic statement** showing the date, merchant, amount and business purpose may be submitted instead.
+3. Meal expenses must list the names and affiliations of all attendees (for external attendees, company name and title). Client entertainment above **USD 75 per person** additionally requires an "Entertainment Pre-Approval Request (F-009)".
+
+### Article 11 (Returned Reports and Resubmission)
+1. If Accounts Payable finds a problem with a report, it is returned in "FlowDesk".
+2. A corrected report must be resubmitted **within 3 business days** of the return notice. Otherwise it is carried over to a later month and treated as late under Article 8, Paragraph 3.
+
+### Article 12 (Cash Advances)
+1. When an employee cannot reasonably pay expenses up front for a trip, request a cash advance with the "Cash Advance Request (F-011)" at least 5 business days before departure.
+2. Settle the advance against actual expenses within 5 business days after return. Any difference is promptly repaid or paid out.
+3. An employee who settles late loses the right to request cash advances for 6 months.
+
+---
+
+## Chapter 4 Benefits and HR Procedures
+
+### Article 13 (Night Shift Differential)
+1. The night shift differential is paid for work performed between 10:00 PM and 5:00 AM outside scheduled working hours.
+2. The rate is the base hourly rate **plus 25%**, and in addition the Company pays a flat **USD 15 per shift** "Night Operations Premium".
+3. For warehouse and distribution center staff, pay is calculated under the applicable alternative workweek agreement, which takes precedence over this Article.
+
+### Article 14 (Night Shift Request Deadline)
+1. To work a night shift (a shift that includes hours after 10:00 PM), or when a manager assigns one, the request must be submitted and approved in the shift management system "Shift-DL" **by 5:00 PM on the Friday two weeks before the shift starts**.
+2. For night shifts required by emergencies or unplanned logistics work, verbal approval from the manager at least 6 hours before the shift starts, followed by entry in the system the same day, is sufficient.
+3. Night work performed without an approved request must still be recorded and is paid in full, but it is reviewed by the department head and People Operations for compliance and may result in coaching.
+
+### Article 15 (Lost Health Insurance ID Card)
+1. If an employee loses their health insurance ID card, take the following steps promptly:
+   - **Contact: People Operations** (ext. 1234 / people-ops@demo-logistics.example.com)
+   - Documents: "Replacement ID Card Request (F-031)" and a copy of photo identification
+   - Also submit a "Loss Report (F-032)" briefly describing how the card was lost
+2. If the card may have been stolen, filing a police report and keeping the report number is recommended, to guard against identity misuse.
+3. Replacement cards usually arrive **7 to 10 business days after the request is accepted**. If medical care is needed urgently, People Operations can issue a temporary proof-of-coverage letter, so contact them the same day.
+4. If the card was lost together with credit cards (for example, a lost wallet), also notify the insurer's member services (1-800-XXX-XXXX) to prevent fraudulent use.
+
+### Article 16 (Other HR Procedures)
+- Requests for bereavement leave, parental leave, FMLA leave and caregiver leave follow the separate "Leave Policy (DL-HR-RG-2019-002)", and **People Operations** is the first point of contact for all of them.
+- Changes to tax withholding (Form W-4), address changes and changes in dependents are also handled through People Operations.
+
+---
+
+## Chapter 5 Miscellaneous
+
+### Article 17 (Misconduct)
+Inflated claims, fictitious expenses, intentional concealment of personal expenses and other misconduct are handled strictly under the disciplinary provisions of the Employee Handbook. The Company will require repayment of the full amount of any such expense and may take legal action in serious cases.
+
+### Article 18 (Questions of Interpretation)
+Questions about the interpretation of this Policy are first raised with the employee's manager and then referred to People Operations. The decision of People Operations is final.
+
+### Article 19 (Revision)
+This Policy is revised by resolution of the Executive Committee. Each revision is posted under "01_Policies" on the Shared Drive and announced to all employees by e-mail and on the intranet.
+
+### Article 20 (Effective Date)
+This Policy takes effect on October 1, 2024. Events that occurred before that date are governed by the previous version (Revision 2).
+
+---
+
+## Appendix 1: Forms (Excerpt)
+
+| Form No. | Name | Location | Submit to |
 |---|---|---|---|
-| F-007 | 経費精算遅延始末書 | 02_総務部 ➔ 様式集 | 所属部長経由 → 経理部 |
-| F-009 | 交際費事前申請書 | 02_総務部 ➔ 様式集 | 所属部長 → 経理部 |
-| F-011 | 仮払申請書 | 02_総務部 ➔ 様式集 | 経理部 |
-| F-015 | 自家用車業務利用申請書 | 02_総務部 ➔ 様式集 | 総務部 |
-| F-021 | タクシー代超過利用理由書 | 02_総務部 ➔ 様式集 | 所属部長 → 総務部長 |
-| F-031 | 健康保険被保険者証 再交付申請書 | 02_総務部 ➔ 様式集 | 総務部 佐藤宛 |
-| F-032 | 紛失届出書 | 02_総務部 ➔ 様式集 | 総務部 佐藤宛 |
+| F-007 | Late Submission Explanation | 02_People_Operations ➔ Forms | Department head → Accounts Payable |
+| F-009 | Entertainment Pre-Approval Request | 02_People_Operations ➔ Forms | Department head → Accounts Payable |
+| F-011 | Cash Advance Request | 02_People_Operations ➔ Forms | Accounts Payable |
+| F-015 | Personal Vehicle Business Use Request | 02_People_Operations ➔ Forms | People Operations |
+| F-021 | Excess Justification Form (rideshare/taxi) | 02_People_Operations ➔ Forms | Department head → Director of People Operations |
+| F-031 | Replacement ID Card Request | 02_People_Operations ➔ Forms | People Operations |
+| F-032 | Loss Report | 02_People_Operations ➔ Forms | People Operations |
 
-## 別表2：問い合わせ窓口
+## Appendix 2: Contacts
 
-| 領域 | 担当 | 内線 | メール |
+| Area | Team | Ext. | E-mail |
 |---|---|---|---|
-| 規程全般・労務 | 総務部 佐藤 健一 | 1234 | sato.kenichi@demo-logistics.example.co.jp |
-| 経費・支払 | 経理部 鈴木 美咲 | 1456 | suzuki.misaki@demo-logistics.example.co.jp |
-| シフト・夜勤 | 物流部 田中 浩二 | 2210 | tanaka.koji@demo-logistics.example.co.jp |
+| Policy questions and HR | People Operations | 1234 | people-ops@demo-logistics.example.com |
+| Expenses and payments | Accounts Payable | 1456 | accounts-payable@demo-logistics.example.com |
+| Shifts and night work | Logistics Operations | 2210 | logistics-ops@demo-logistics.example.com |
 
 ---
 
-（以上）
+(End of Policy)

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Phase 3 — build the Dify Knowledge base from code.
 
-Creates the "社内規程ナレッジ" (internal policy knowledge) dataset exactly as specified in
+Creates the "Internal Policy Knowledge" dataset as specified in
 `02_dify_chatflow_design.md` §3-3: Parent-Child chunking, high-quality
-indexing on text-embedding-3-large, Hybrid Search with a Cohere reranker,
+indexing on text-embedding-3-large, Hybrid Search with Weighted Score ranking,
 the six custom metadata fields, and the built-in metadata toggle.
 
     cp scripts/.dify_admin.env.example scripts/.dify_admin.env   # fill DIFY_PASSWORD
@@ -28,10 +28,10 @@ from dify_console import REPO_ROOT, DifyConsole, DifyError, connect, load_env
 STATE_FILE = REPO_ROOT / "scripts" / ".provision_state.json"
 SOURCE_DOCUMENT = REPO_ROOT / "01_dummy_manual_demo_logistics.md"
 
-DATASET_NAME = "社内規程ナレッジ"
+DATASET_NAME = "Internal Policy Knowledge"
 DATASET_DESCRIPTION = (
-    "株式会社デモ・ロジスティクス 旅費交通費・経費精算および労務手続き規定"
-    "（DL-HR-RG-2024-007 第3版）。Hybrid Search + Rerank 構成。"
+    "Demo Logistics Inc. Travel, Expense Reimbursement and HR Procedures Policy "
+    "(DL-HR-RG-2024-007, Revision 3). Hybrid Search with Weighted Score ranking."
 )
 
 EMBEDDING_PROVIDER = "langgenius/openai/openai"
@@ -39,18 +39,17 @@ EMBEDDING_MODEL = "text-embedding-3-large"
 
 # §3-3 ④ — Hybrid Search submode.
 #
-# The design doc recommends the Rerank Model submode with Cohere
-# rerank-multilingual-v3.0. We use the Weighted Score submode instead, for two
-# reasons, both measured (scripts/measure_recall.py):
+# Earlier revisions of the design doc recommended the Rerank Model submode with
+# Cohere rerank-multilingual-v3.0. We use the Weighted Score submode instead:
 #
-#   * Egress. §4-7 sells this stack on "your data never leaves the building". Cohere rerank is a
-#     second external dependency that ships the user's question *and* the
-#     matching regulation text to a third party. Weighted Score is computed
-#     inside Weaviate, so OpenAI (embeddings + LLM) becomes the only egress.
-#   * It costs nothing in quality here. Both submodes score Recall@4 = 100% on
-#     the ten §3-4 test queries. Cohere additionally rate-limits at ~10 req/min
-#     on a trial key and returns *zero* results when throttled, with no error —
-#     an unpleasant failure mode to hit during a live demo.
+#   * Egress. §4-7 sells this stack on "your data never leaves the building".
+#     Cohere rerank is a second external dependency that ships the user's
+#     question *and* the matching policy text to a third party. Weighted Score
+#     is computed inside Weaviate, so OpenAI (embeddings + LLM) is the only egress.
+#   * It cost nothing in quality. On the Japanese corpus (tag v1-ja) both
+#     submodes scored Recall@4 = 100% on the ten §3-4 test queries. Cohere also
+#     rate-limits at ~10 req/min on a trial key and returns *zero* results when
+#     throttled, with no error — an unpleasant failure mode in a live demo.
 #
 # The 0.7/0.3 split is the design doc's own recommended weighting.
 SEMANTIC_WEIGHT = 0.7
@@ -58,55 +57,50 @@ KEYWORD_WEIGHT = 0.3
 
 # §3-3 ① — Parent-Child chunking.
 #
-# The design doc writes the parent delimiter as `\n### \n#### \n第`. Two things
-# about Dify make that unusable as written:
+# Two things about Dify decide the delimiter (§4-8 ⑤ ⑥):
 #
 #   1. The delimiter is a single literal string, not a list, and Dify runs it
-#      through `codecs.decode(sep, "unicode_escape")`. That codec mangles any
-#      non-ASCII character, so `\n第` reaches the splitter as `\nç¬¬` and never
-#      matches anything.
+#      through `codecs.decode(sep, "unicode_escape")`, which mangles any
+#      non-ASCII character. Keep it ASCII and a single pattern.
 #   2. Dify's markdown extractor splits a .md file at *every* heading
 #      (`re.match(r"^#+\s", line)`) before the chunk settings are applied. Upload
-#      the regulation as .md and each `#### 第N項` becomes its own parent, which
+#      the policy as .md and each `#### Clause N` becomes its own parent, which
 #      silently defeats the whole point of parent chunks.
 #
 # So: upload a .txt rendering (see build_plaintext_source) and use `\n### ` as
-# the delimiter. Parents then land on `### 第N条` boundaries, exactly as the
-# design intends. The splitter consumes the delimiter, so chunks start cleanly
-# at "第N条（...）".
+# the delimiter. Parents then land on `### Article N` boundaries. The splitter
+# consumes the delimiter, so chunks start cleanly at "Article N (...)".
 PARENT_DELIMITER = "\\n### "
-# The design doc says 1,200, but the longest clause (第5条 / Article 5, taxi fare eligibility)
-# is 1,287 characters. At 1,200 the splitter cut it in half, so a query matching
-# 第2項 returned a parent that no longer contained 第1項 — the exact text the user
-# asked about. 1,400 keeps all 21 clauses whole, which is the point of parents.
-PARENT_MAX_CHARS = 1400
+# Parents must hold a whole article, or a query that matches one clause gets back
+# a parent missing the clause that actually answers it (§4-8 ⑥). The longest
+# article (Article 5, late-night rideshare and taxi) is 3,223 characters; 3,500
+# keeps all 20 whole and stays under Dify's default 4,000 maximum.
+PARENT_MAX_CHARS = 3500
 CHILD_DELIMITER = "\\n"
-CHILD_MAX_CHARS = 250
+# Children are split per line, so each bullet or numbered paragraph is embedded
+# on its own. The longest line is 360 characters; 400 keeps every line whole.
+CHILD_MAX_CHARS = 400
 
 TOP_K = 4
-# The design doc specifies 0.5, which does not survive measurement. Under
-# Weighted Score the ten §3-4 queries top out between 0.36 and 0.64, so 0.5
-# would drop most of them. Measured distribution:
+# A noise filter, not the guardrail. On the Japanese corpus (tag v1-ja) the
+# in-scope and out-of-scope top scores overlapped (0.3623–0.6438 vs
+# 0.2144–0.3849), so no threshold can separate them, and refusing is the job of
+# the §1-2 system prompt. 0.3 was chosen there because it sat below every
+# correct hit while cutting 3 of 4 out-of-scope queries.
 #
-#     in-scope     top score  0.3623 .. 0.6438
-#     out-of-scope top score  0.2144 .. 0.3849
-#
-# The ranges still overlap slightly, so a threshold can never be the
-# anti-hallucination guardrail on its own — that job belongs to the §1-2 system
-# prompt, which refuses when <context> does not contain the answer. (This is
-# also why the §2-4 IF/ELSE score gate is not worth building.) 0.3 sits below
-# every correct hit with margin while cutting 3 of the 4 out-of-scope queries,
-# so it is a useful noise filter and keeps Recall@4 = 100%.
+# The English corpus has not been measured yet. Before trusting 0.3, run
+#     python3 scripts/measure_recall.py
+# and put the threshold below the lowest in-scope top score.
 SCORE_THRESHOLD = 0.3
 
 # §3-3 ⑥ Step 1 — schema, and Step 2 — the values for this one document.
 METADATA_FIELDS: dict[str, str] = {
     "doc_id": "DL-HR-RG-2024-007",
-    "doc_title": "旅費交通費・経費精算および労務手続き規定",
+    "doc_title": "Travel, Expense Reimbursement and HR Procedures Policy",
     "doc_version": "v3",
     "last_revised": "2024-10-01",
     "doc_type": "regulation",
-    "category": "総務",
+    "category": "people_operations",
 }
 
 RETRIEVAL_WEIGHTS: dict[str, Any] = {
@@ -131,7 +125,7 @@ RETRIEVAL_MODEL: dict[str, Any] = {
 }
 
 
-UPLOAD_FILENAME = "DL-HR-RG-2024-007_旅費交通費・経費精算および労務手続き規定.txt"
+UPLOAD_FILENAME = "DL-HR-RG-2024-007_Travel_Expense_and_HR_Procedures_Policy.txt"
 
 
 def log(message: str) -> None:
@@ -141,8 +135,8 @@ def log(message: str) -> None:
 def build_plaintext_source(markdown_path: Path) -> str:
     """Render the markdown regulation as plain text for ingestion.
 
-    Only `#### 第N項` headings are flattened — they are sub-items of a clause and
-    should stay inside their parent chunk. The `### 第N条` headings are kept
+    Only `#### Clause N` headings are flattened — they are sub-items of an article
+    and should stay inside their parent chunk. The `### Article N` headings are kept
     because they are what PARENT_DELIMITER splits on (and the splitter strips
     the delimiter, so the marker never shows up in a citation).
     """
@@ -202,7 +196,7 @@ def build_knowledge_config(file_id: str) -> dict[str, Any]:
     return {
         "indexing_technique": "high_quality",
         "doc_form": "hierarchical_model",  # Parent-Child
-        "doc_language": "Japanese",
+        "doc_language": "English",
         "embedding_model": EMBEDDING_MODEL,
         "embedding_model_provider": EMBEDDING_PROVIDER,
         "data_source": {
@@ -216,7 +210,7 @@ def build_knowledge_config(file_id: str) -> dict[str, Any]:
             "rules": {
                 "pre_processing_rules": [
                     # §3-3 ①: collapse whitespace, but never strip URLs/emails —
-                    # the guardrail reply has to be able to cite Sato's e-mail address.
+                    # the guardrail reply has to be able to cite People Operations' e-mail address.
                     {"id": "remove_extra_spaces", "enabled": True},
                     {"id": "remove_urls_emails", "enabled": False},
                 ],
@@ -341,7 +335,7 @@ def main() -> int:
             "embedding_model_provider": EMBEDDING_PROVIDER,
         },
     )
-    log(f"[ok]   dataset named '{DATASET_NAME}', Hybrid Search + Rerank applied")
+    log(f"[ok]   dataset named '{DATASET_NAME}', Hybrid Search + Weighted Score applied")
 
     log("[info] waiting for embedding to finish (this takes a few minutes)")
     wait_for_indexing(console, dataset_id, batch)

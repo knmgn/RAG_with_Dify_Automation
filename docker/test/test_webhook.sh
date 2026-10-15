@@ -77,7 +77,7 @@ echo -e "${INFO} Test 3/4: Workflow 1 (Intent Dispatcher) returns success JSON"
 PAYLOAD='{
   "intent": "request_expense_template",
   "user_id": "test_user_001",
-  "user_query": "経費精算のフォーマットちょうだい",
+  "user_query": "Send me the expense report template.",
   "metadata": { "template_key": "expense_template_v3" }
 }'
 RESP=$(curl -s -X POST "${BASE_URL}/webhook/${INTENT_DISPATCHER_PATH}" \

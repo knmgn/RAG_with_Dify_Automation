@@ -24,7 +24,7 @@ class DifyAPIError(RuntimeError):
 @dataclass(frozen=True)
 class Citation:
     document_name: str
-    # First line of the retrieved parent chunk, e.g. "第5条（タクシー代の支給要件）".
+    # First line of the retrieved parent chunk, e.g. "Article 5 (Late-Night Rideshare and Taxi)".
     # Parents are cut on article headings (§3-3 ①), so this is the article title.
     clause: str
     score: float

@@ -198,7 +198,7 @@
           "responseCode": 200
         },
         "respondWith": "json",
-        "responseBody": "={\n  \"status\": \"success\",\n  \"intent\": \"request_expense_template\",\n  \"filename\": \"経費精算テンプレート_v3.xlsx\",\n  \"download_url\": \"http://localhost:5678/webhook/files/expense-v3\",\n  \"message\": \"経費精算テンプレートをご用意しました。下記URLからダウンロードしてください。\",\n  \"regulation_ref\": \"DL-HR-RG-2024-007 第8条・第9条\",\n  \"deadline\": \"毎月25日17:00必着\",\n  \"macro_warning\": \"マクロを必ず有効化してください（規程第9条第4項）\"\n}"
+        "responseBody": "={\n  \"status\": \"success\",\n  \"intent\": \"request_expense_template\",\n  \"filename\": \"expense_template_v3.xlsx\",\n  \"download_url\": \"http://localhost:5678/webhook/files/expense-v3\",\n  \"message\": \"Here is the expense report template. Download it from the link below.\",\n  \"regulation_ref\": \"DL-HR-RG-2024-007 Articles 8 and 9\",\n  \"deadline\": \"Must be received by 5:00 PM on the 25th of each month\",\n  \"macro_warning\": \"Macros must be enabled (Article 9, Paragraph 4)\"\n}"
       },
       "position": [
         400,
@@ -215,7 +215,7 @@
           "responseCode": 400
         },
         "respondWith": "json",
-        "responseBody": "={\n  \"status\": \"error\",\n  \"code\": 400,\n  \"message\": \"Unknown intent. Please contact General Affairs (Sato, ext.1234).\",\n  \"received_intent\": \"{{ $json.intent }}\"\n}"
+        "responseBody": "={\n  \"status\": \"error\",\n  \"code\": 400,\n  \"message\": \"Unknown intent. Please contact People Operations (ext. 1234).\",\n  \"received_intent\": \"{{ $json.intent }}\"\n}"
       },
       "position": [
         400,

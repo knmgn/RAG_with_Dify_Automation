@@ -1,7 +1,7 @@
 """Bridge state, persisted in SQLite: thread → conversation, and escalations.
 
 One Slack thread = one Dify conversation, so follow-up questions in a thread
-keep their context ("それって領収書いる？" after a taxi question) while a new
+keep their context ("Do I need a receipt for that?" after a rideshare question) while a new
 top-level question starts fresh. SQLite keeps the mapping across restarts;
 Bolt runs listeners on a thread pool, hence the lock.
 """

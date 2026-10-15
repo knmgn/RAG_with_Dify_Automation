@@ -1,6 +1,6 @@
 # Operations Manual — Demo-Logi-Bot (§4-7 fully local setup)
 
-> Audience: the people who **operate** the deployed environment (internal IT, General Affairs administrators)
+> Audience: the people who **operate** the deployed environment (internal IT, People Operations administrators)
 > Prerequisite: the environment is running, set up as described in `docker/README.md`
 > Related: the reasoning behind each design value is in [`02_dify_chatflow_design.md`](./02_dify_chatflow_design.md)
 
@@ -92,7 +92,7 @@ Use this when the policy moves to revision 4, a clause is added, and so on. **It
 ```bash
 # 1. Update the policy text
 #    Edit 01_dummy_manual_demo_logistics.md
-#    (always keep headings in the form ### 第N条（...）; see below)
+#    (always keep headings in the form ### Article N (...); see below)
 
 # 2. Rebuild the knowledge base
 python3 scripts/provision_knowledge.py --recreate
@@ -118,11 +118,11 @@ question.
 
 | Rule | Why |
 |---|---|
-| Keep clause headings in the form `### 第N条（...）` (Article N) | Chunks are split on these headings (§3-3 ①) |
-| Keep each clause within 1,400 characters | Longer clauses get cut mid-way and retrieval quality drops |
+| Keep article headings in the form `### Article N (...)` | Chunks are split on these headings (§3-3 ①), and `measure_recall.py` matches on them |
+| Keep each article within 3,500 characters | Longer articles get cut mid-way and retrieval quality drops |
 | Keep the contact e-mail address in the text | The refusal message cites it |
 
-If a clause exceeds 1,400 characters, raise `PARENT_MAX_CHARS` in
+If an article exceeds 3,500 characters, raise `PARENT_MAX_CHARS` in
 `scripts/provision_knowledge.py`. To check clause lengths:
 
 ```bash
@@ -153,7 +153,7 @@ pip install openpyxl
 python3 scripts/build_expense_template.py
 
 # 2. Replace the file n8n serves
-cp 経費精算テンプレート_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
+cp expense_template_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
 
 # 3. macOS only: strip extended attributes (important)
 xattr -c docker/n8n/templates/expense_template_v3.xlsx
@@ -175,7 +175,7 @@ A new file name has to be changed in three places. **Miss one and delivery break
 2. The File Selector of the `Read/Write Files from Disk` node in n8n Workflow 2
    (`/home/node/.n8n-files/<new name>`)
 3. The `Content-Disposition` header of `Respond to Webhook` in n8n Workflow 2
-   (RFC 5987 form for Japanese names; see §4-8 ④ for how to generate it)
+   (non-ASCII names need the RFC 5987 form; see §4-8 ④)
 
 Afterwards, run `python3 scripts/export_n8n_workflows.py` to update the JSON in the repository.
 
@@ -309,9 +309,9 @@ python3 scripts/test_e2e.py
 
 OpenAI is the only external charge.
 
-- **Embeddings:** rebuilding for one policy (about 6,400 characters) costs a few yen (well under
-  USD 0.10) per run, and only on revision
-- **LLM (gpt-4o-mini):** each question sends roughly 2,000–4,000 input tokens (system prompt plus
+- **Embeddings:** rebuilding for one policy (about 15,000 characters) costs well under USD 0.01 per
+  run, and only on revision
+- **LLM (gpt-4o-mini):** each question sends roughly 2,000–5,000 input tokens (system prompt plus
   four retrieved chunks). Cost scales with the number of questions
 
 Check OpenAI's pricing page for current rates.
