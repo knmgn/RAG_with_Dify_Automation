@@ -1308,6 +1308,19 @@ docker inspect docker-api-1 \
 - If you really need several, set an explicit name such as `COMPOSE_PROJECT_NAME=dify-demo`
   in each `.env` to avoid collisions
 
+### 4-9. Slack front end via Socket Mode (implemented)
+
+§4-1 to 4-5 describe Slack delivery as n8n nodes behind the Events API, which needs a public
+Request URL. The implemented front end ([`slack_bridge/`](./slack_bridge/README.md)) takes a
+different route that fits §4-7 better:
+
+- **Socket Mode:** the bridge opens an outbound WebSocket to Slack, so no URL, tunnel or inbound
+  port is exposed. It runs as a container on `demo-rag-net` and calls the Dify Service API directly.
+- **One thread = one conversation:** follow-ups in a Slack thread reuse the Dify `conversation_id`.
+- **Human escalation:** when the fixed refusal (§1-2) is detected, an escalation card goes to the
+  owners' channel. The owner's reply is posted in the employee's thread, labelled human-written.
+- No change to the Chatflow is required. The file-request path keeps going through n8n (§4-7).
+
 ---
 
 ## 5. Extension roadmap (proposal hooks for clients)

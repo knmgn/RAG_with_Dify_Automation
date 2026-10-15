@@ -1,10 +1,11 @@
-# Enterprise RAG Automation with Dify & n8n
+# Enterprise RAG Automation with Dify, n8n & Slack HITL
 
 **A policy assistant that answers only from your internal rules, cites the clause it used, and refuses rather than guesses. It also runs the business process behind the question.**
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Dify](https://img.shields.io/badge/Dify-Self--Hosted-1C64F2)
 ![n8n](https://img.shields.io/badge/n8n-Workflow_Automation-EA4B71?logo=n8n&logoColor=white)
+![Slack](https://img.shields.io/badge/Slack-Bolt_·_Socket_Mode-4A154B?logo=slack&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![Weaviate](https://img.shields.io/badge/Weaviate-Hybrid_Search-00C29A)
 ![OpenAI](https://img.shields.io/badge/OpenAI-gpt--4o--mini-412991?logo=openai&logoColor=white)
@@ -33,8 +34,8 @@ prompt-tuning afterthoughts:
 |---|---|
 | **No hallucinated policy** | Two independent guardrails: a retrieval score threshold filters noise, and a strict system prompt forces a fixed refusal whenever the retrieved context does not contain the answer. |
 | **Auditability** | Every answer ends with a mandatory citation block (policy ID, chapter / article / clause, revision date). Amounts and deadlines are quoted verbatim. |
-| **Data governance** | Fully self-hosted Dify + n8n on Docker. Retrieval ranking runs inside Weaviate, and **OpenAI (embeddings + LLM) is the only external egress**. No third-party reranker ever sees employee questions or policy text. |
-| **Accountability** | Out-of-scope questions and exception requests are handed to a named human owner instead of being decided by the model. |
+| **Data governance** | Fully self-hosted Dify + n8n on Docker. Retrieval ranking runs inside Weaviate, so the policy corpus and retrieved policy text go only to **OpenAI (embeddings + LLM)**. No third-party reranker ever sees employee questions or policy text. The Slack front end connects over an outbound WebSocket (Socket Mode), so **no port on the host is exposed to the internet**. |
+| **Accountability** | Out-of-scope questions are escalated in Slack to a named human owner, who answers in the employee's thread with one click. The model never decides what the policy does not cover. |
 | **Beyond Q&A** | Requests such as "send me the expense template" are classified as actions and executed through an authenticated n8n webhook. The chatbot becomes an automation front-end. |
 | **Reproducibility** | The knowledge base and Chatflow are provisioned by script through Dify's API instead of by clicking through the admin UI, so every number below can be re-measured. |
 
@@ -45,6 +46,7 @@ prompt-tuning afterthoughts:
 | Retrieval **Recall@4** on the 10 design-doc test queries | **10/10 = 100%** | `python3 scripts/measure_recall.py --threshold 0.3` |
 | End-to-end tests (policy Q&A, refusal, file delivery via n8n) | **3/3 pass** | `python3 scripts/test_e2e.py` |
 | n8n connectivity chain (host → n8n, Dify → n8n, WF1, WF2) | **4/4 pass** | `./docker/test/test_webhook.sh` |
+| Slack bridge unit tests (question flow, escalation lifecycle, Dify client) | **25/25 pass** | `cd slack_bridge && python3 -m unittest discover -s tests` |
 | Top retrieval score, in-scope vs. out-of-scope queries | `0.36–0.64` vs. `0.21–0.38` | `python3 scripts/measure_recall.py` |
 
 The last row matters. The two score ranges **overlap**, so a score threshold alone can never be an
@@ -56,8 +58,9 @@ anti-hallucination guardrail. That observation drives the two-layer design below
 
 ```mermaid
 flowchart LR
-    U(["👤 Employee"]) -->|"natural-language question"| CH["Chat channel<br/>Dify Web App / Service API"]
-    CH --> QC{"Question Classifier<br/>(intent detection)"}
+    U(["👤 Employee"]) -->|"@mention or DM"| SL["Slack"]
+    SL <-->|"Socket Mode<br/>(outbound WebSocket)"| BR["slack_bridge<br/>thread ↔ conversation"]
+    BR -->|"Service API<br/>/v1/chat-messages"| QC{"Question Classifier<br/>(intent detection)"}
 
     subgraph RAG["Policy Q&A path"]
         direction TB
@@ -88,10 +91,11 @@ flowchart LR
     QC -->|"Class 1: policy question"| KR
     QC -->|"Class 2: file request"| HTTP
 
-    ANS --> CH
-    FA --> CH
-    FB --> CH
-    FB -.->|"escalate"| H(["🧑‍💼 Named policy owner<br/>General Affairs"])
+    ANS -->|"threaded reply + sources"| BR
+    FA --> BR
+    FB --> BR
+    BR -.->|"refusal → escalation card"| H(["🧑‍💼 Policy owner<br/>General Affairs"])
+    H -.->|"Reply in thread<br/>(human-written)"| SL
 
     classDef guard fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
     classDef ok fill:#dcfce7,stroke:#16a34a,color:#14532d
@@ -99,6 +103,8 @@ flowchart LR
     class FB,GR,TH guard
     class ANS ok
     class HTTP,WF1,CODE,FA,WF2 auto
+    classDef slack fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
+    class SL,BR slack
 ```
 
 **Deployment topology.** Everything runs on one Docker host. Dify (`api`, `worker`, `ssrf_proxy`)
@@ -106,6 +112,8 @@ and n8n share a private Docker network (`demo-rag-net`). Dify reaches n8n by ser
 (`http://n8n_local:5678`), and outbound HTTP from Chatflows goes through Dify's squid SSRF proxy,
 which is explicitly allow-listed for `n8n_local`. The browser downloads files through the published
 host port, a deliberate "two URLs" design documented in [`docker/README.md`](./docker/README.md).
+The Slack bridge joins the same network, calls Dify's Service API directly, and publishes no ports.
+The Dify Web App remains available as a second channel.
 
 ---
 
@@ -142,9 +150,16 @@ host port, a deliberate "two URLs" design documented in [`docker/README.md`](./d
   when rate-limited, which is a silent failure mode you do not want in production.
 
 ### 🤝 Human-in-the-Loop (HITL) Workflow Integration
-- **Human escalation:** the fallback message routes the employee to a **named owner and contact
-  channel** in General Affairs. Requests to bend the rules ("can you make an exception?") are always
-  sent to a human, never decided by the model.
+- **Slack escalation loop** ([`slack_bridge/`](./slack_bridge/)): when the guardrail refuses, the
+  bridge posts an escalation card to the policy owners' channel. **Reply in thread** opens a modal,
+  and the owner's answer is posted in the employee's thread under the owner's name, labelled as
+  human-written. **Mark resolved** closes the card without a reply. The first owner to act claims the
+  card, so two people never answer the same question.
+- **Honest hand-off:** the employee is told "a person will reply here" only if the card was actually
+  posted. If escalation is off or fails, they still get the fixed refusal with the owner's contact
+  details. Requests to bend the rules ("can you make an exception?") always go to a human.
+- **Context per thread:** one Slack thread maps to one Dify conversation, so follow-ups keep their
+  context, and each answer lists the retrieved articles with their relevance scores.
 - **Action execution:** a Question Classifier separates *questions* from *requests*. File requests
   call an **authenticated n8n webhook** (shared-secret `X-Auth-Token`), which returns a structured
   payload (download URL, submission deadline, macro warning, policy reference) that Dify renders
@@ -232,6 +247,7 @@ User question: {{#sys.query#}}
 - **Embeddings:** OpenAI `text-embedding-3-large`
 - **Vector store / search:** Weaviate, Hybrid Search (vector + BM25) with Weighted Score ranking
 - **Workflow automation:** n8n (Webhook, Switch, Respond to Webhook, Read/Write Files from Disk)
+- **Chat front end:** Slack Bolt for Python in Socket Mode, Block Kit (cards, buttons, modals), SQLite for thread and escalation state
 - **Infrastructure:** Docker Compose, shared Docker network, squid SSRF proxy allow-listing
 - **Tooling:** Python 3.10+ standard library (provisioning, recall measurement, E2E tests), `openpyxl` (template generator)
 - **Security:** shared-secret webhook authentication, secrets kept in gitignored env files, SOPS config for encrypted secrets
@@ -303,6 +319,17 @@ Then open the published app in Dify and try:
 | "What does labor law say about overtime pay?" | Fixed fallback message + escalation contact |
 | "Send me the expense report template." | n8n webhook fires, reply includes a working download link |
 
+### 5. Connect Slack (optional)
+
+Create the Slack app from [`slack_bridge/manifest.yaml`](./slack_bridge/manifest.yaml), fill in
+`slack_bridge/.env` (bot token, app-level token, Dify app key, escalation channel ID), then:
+
+```bash
+cd slack_bridge && docker compose up -d --build
+```
+
+Step-by-step instructions are in [`slack_bridge/README.md`](./slack_bridge/README.md).
+
 > The demo corpus and the bot's replies are in Japanese, because the use case targets Japanese
 > back-office teams. The pipeline is language-agnostic. Localizing it means swapping the knowledge
 > corpus and the system prompt, while the graph, classifier, webhook contract and guardrails stay
@@ -321,18 +348,19 @@ Then open the published app in Dify and try:
 | `dify/chatflow_dsl.yaml` | Exported Chatflow DSL (secrets stripped) |
 | `docker/` | Self-hosted stack: n8n compose, Dify override, workflows, connectivity test |
 | `scripts/` | Provisioning, recall measurement, E2E tests, template generator, n8n export sanitizer |
+| `slack_bridge/` | Slack front end: Socket Mode bridge, human escalation loop, Slack app manifest, unit tests |
 | `demo/` | Bilingual captions for the 60-second demo video |
 
 ---
 
 ## Roadmap
 
-- **Slack front-end:** Slack Events API → n8n → Dify Service API → threaded Slack reply, with the
-  fallback path opening a ticket for the policy owner (approve / answer from Slack).
 - **Approval-gated actions:** route exception requests to a manager for one-click approval before
   any action runs.
-- **Answer feedback loop:** collect 👍/👎 in the chat channel and feed low-rated questions back into
+- **Answer feedback loop:** collect 👍/👎 on Slack answers and feed low-rated questions back into
   the test set used by `measure_recall.py`.
+- **Escalations as training data:** turn owner answers from the Slack loop into proposed policy
+  amendments or FAQ entries, so the same question is covered next time.
 
 ---
 

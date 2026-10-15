@@ -1,0 +1,31 @@
+# Slack app manifest for the Demo-Logi-Bot bridge.
+# api.slack.com/apps → Create New App → From an app manifest → paste this file.
+display_information:
+  name: Demo-Logi-Bot
+  description: Internal policy assistant for Demo Logistics Inc. (Dify RAG)
+  background_color: "#1f3864"
+features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: Demo-Logi-Bot
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read   # questions asked with @Demo-Logi-Bot in channels
+      - chat:write          # answers, escalation cards, human replies
+      - im:history          # questions asked in a direct message
+      - reactions:write     # the ⏳ "working on it" reaction
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.im
+  interactivity:
+    is_enabled: true        # "Reply in thread" / "Mark resolved" buttons and the reply modal
+  org_deploy_enabled: false
+  socket_mode_enabled: true # no public Request URL needed
+  token_rotation_enabled: false

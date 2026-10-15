@@ -26,6 +26,7 @@ Browser ──80──→ [Dify]  ──internal network──→ [n8n] ──�
 | `docker-weaviate-1` | Vector store (search index of the policy) | Search returns zero hits and every question is refused |
 | `docker-ssrf_proxy-1` | Relay for Dify's outbound traffic | Only file requests fail |
 | `n8n_local` | File delivery | Only file requests fail |
+| `slack_bridge` (optional) | Slack front end and escalation loop | The bot stops answering in Slack; the Dify Web App still works |
 
 **Data that leaves the host:** the user's question and the excerpts of policy text that
 retrieval returned are sent to OpenAI. Everything else (the files themselves, conversation
@@ -41,6 +42,7 @@ logs, routing logic) stays on the company's server.
 # Start (Dify, then n8n. Either order works, but this one is safest)
 cd ~/dify-local/docker && docker compose up -d
 cd <this-repo>/docker/n8n && docker compose up -d
+cd <this-repo>/slack_bridge && docker compose up -d   # only if the Slack front end is used
 
 # Stop (data is kept)
 cd ~/dify-local/docker && docker compose down
