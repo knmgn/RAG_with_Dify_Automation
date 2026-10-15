@@ -1,126 +1,127 @@
-# 運用マニュアル — Demo-Logi-Bot（§4-7 完全ローカル構成）
+# Operations Manual — Demo-Logi-Bot (§4-7 fully local setup)
 
-> 対象：構築済み環境を**運用する人**（社内情報システム担当／総務部の管理者）
-> 前提：`docker/README.md` の手順で環境が起動済みであること
-> 関連：設計値の根拠は [`02_dify_chatflow_design.md`](./02_dify_chatflow_design.md)
+> Audience: the people who **operate** the deployed environment (internal IT, General Affairs administrators)
+> Prerequisite: the environment is running, set up as described in `docker/README.md`
+> Related: the reasoning behind each design value is in [`02_dify_chatflow_design.md`](./02_dify_chatflow_design.md)
 
-このマニュアルは「作った後」の話だけを扱います。日々の起動停止、規程が改訂された
-ときの入れ替え、Excelテンプレートの差し替え、バックアップ、そして調子が悪いときの
-一次切り分けです。
+This manual covers only what happens *after* the build: daily start and stop, swapping in a
+revised policy, replacing the Excel template, backups, and first-line triage when something
+goes wrong.
 
 ---
 
-## 0. この環境の構成（1分で把握する）
+## 0. How this environment fits together (one-minute overview)
 
 ```
-ブラウザ ──80──→ [Dify]  ──社内ネットワーク──→ [n8n] ──→ templates/*.xlsx
-                    │                              ↑
-                    └── OpenAI API（唯一の外部通信）  └── ブラウザから 5678 で直接DL
+Browser ──80──→ [Dify]  ──internal network──→ [n8n] ──→ templates/*.xlsx
+                   │                             ↑
+                   └── OpenAI API (only egress)  └── browser downloads directly on 5678
 ```
 
-| コンテナ | 役割 | 止まると何が起きるか |
+| Container | Role | What breaks when it stops |
 |---|---|---|
-| `docker-nginx-1` | Dify の入口（ポート80） | 画面が開かない |
-| `docker-api-1` / `docker-worker-1` | Dify 本体 | Bot が応答しない |
-| `docker-db_postgres-1` | 会話ログ・アプリ設定 | Bot が応答しない |
-| `docker-weaviate-1` | ベクトルストア（規程の検索インデックス） | 検索が0件になり全部突っぱねる |
-| `docker-ssrf_proxy-1` | Dify の外向き通信の中継 | ファイル要求だけ失敗する |
-| `n8n_local` | ファイル配信 | ファイル要求だけ失敗する |
+| `docker-nginx-1` | Dify front door (port 80) | The UI does not load |
+| `docker-api-1` / `docker-worker-1` | Dify core | The bot does not respond |
+| `docker-db_postgres-1` | Conversation logs, app settings | The bot does not respond |
+| `docker-weaviate-1` | Vector store (search index of the policy) | Search returns zero hits and every question is refused |
+| `docker-ssrf_proxy-1` | Relay for Dify's outbound traffic | Only file requests fail |
+| `n8n_local` | File delivery | Only file requests fail |
 
-**外部に出るデータ**：ユーザーの質問文と、検索でヒットした規程本文の抜粋が OpenAI に
-送信されます。それ以外（ファイル本体、会話ログ、判断ロジック）はすべて社内に残ります。
+**Data that leaves the host:** the user's question and the excerpts of policy text that
+retrieval returned are sent to OpenAI. Everything else (the files themselves, conversation
+logs, routing logic) stays on the company's server.
 
 ---
 
-## 1. 日常運用
+## 1. Daily operation
 
-### 起動・停止
+### Start and stop
 
 ```bash
-# 起動（Dify → n8n の順。どちらが先でも動くが、この順が無難）
+# Start (Dify, then n8n. Either order works, but this one is safest)
 cd ~/dify-local/docker && docker compose up -d
-cd <このリポジトリ>/docker/n8n && docker compose up -d
+cd <this-repo>/docker/n8n && docker compose up -d
 
-# 停止（データは残る）
+# Stop (data is kept)
 cd ~/dify-local/docker && docker compose down
-cd <このリポジトリ>/docker/n8n && docker compose down
+cd <this-repo>/docker/n8n && docker compose down
 ```
 
-> ⚠️ `docker compose down -v` は**使わないこと**。`-v` はボリュームを削除し、
-> 会話ログもナレッジも消えます。
+> ⚠️ **Do not use** `docker compose down -v`. `-v` deletes the volumes, and with them the
+> conversation logs and the knowledge base.
 
-> ⚠️ Dify のディレクトリは**常に同じ場所から**操作してください。理由は §4-8 ⑫。
-> 現在どこから起動されているかは次で確認できます：
+> ⚠️ Always operate Dify **from the same directory**. See §4-8 ⑫ for why.
+> To check where it is currently running from:
 > ```bash
 > docker inspect docker-api-1 --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'
 > ```
 
-### 稼働確認
+### Health check
 
 ```bash
-# 全コンテナの状態
+# State of every container
 docker ps --format 'table {{.Names}}\t{{.Status}}'
 
-# エンドツーエンドで健全性を確認（3テスト、約1分）
+# End-to-end health check (3 tests, about 1 minute)
 python3 scripts/test_e2e.py
 ```
 
-`test_e2e.py` が 3/3 PASS なら、検索・LLM・n8n連携・ファイル配信のすべてが生きています。
-**朝一番にこれを流すだけで、その日の稼働確認は完了**と考えて構いません。
+If `test_e2e.py` reports 3/3 PASS, retrieval, the LLM, the n8n integration and file delivery
+are all working. **Running this first thing in the morning is enough as the day's health check.**
 
-### ログを見る
+### Logs
 
 ```bash
-docker compose logs -f api          # Dify（~/dify-local/docker で実行）
+docker compose logs -f api          # Dify (run in ~/dify-local/docker)
 docker logs -f n8n_local            # n8n
 ```
 
-n8n の実行履歴は UI（<http://localhost:5678> → Executions）のほうが読みやすいです。
+n8n's execution history is easier to read in the UI (<http://localhost:5678> → Executions).
 
 ---
 
-## 2. 規程を改訂したとき（再Embedding）
+## 2. When the policy is revised (re-embedding)
 
-規程が第4版になった、条文が追加された、といった場合の手順です。**所要時間は5分程度**、
-うち Embedding が1〜2分です。
+Use this when the policy moves to revision 4, a clause is added, and so on. **It takes about
+5 minutes**, of which embedding takes 1–2.
 
-### 手順
+### Procedure
 
 ```bash
-# 1. 規程本文を更新する
-#    01_dummy_manual_demo_logistics.md を編集
-#    （見出しは ### 第N条（...） の形式を必ず維持すること。後述）
+# 1. Update the policy text
+#    Edit 01_dummy_manual_demo_logistics.md
+#    (always keep headings in the form ### 第N条（...）; see below)
 
-# 2. ナレッジを作り直す
+# 2. Rebuild the knowledge base
 python3 scripts/provision_knowledge.py --recreate
 
-# 3. 検索品質を実測する
+# 3. Measure retrieval quality
 python3 scripts/measure_recall.py --threshold 0.3
 
-# 4. Chatflow を新しいナレッジに向け直す
+# 4. Point the Chatflow at the new knowledge base
 python3 scripts/provision_chatflow.py --recreate
 
-# 5. 通しで確認する
+# 5. Verify end to end
 python3 scripts/test_e2e.py
 ```
 
-### なぜ Chatflow まで作り直すのか
+### Why the Chatflow has to be rebuilt too
 
-`--recreate` はナレッジを削除して作り直すため、**dataset_id が変わります**。
-Chatflow の Knowledge Retrieval ノードは dataset_id を直接持っているので、
-そのままでは古い（削除済みの）ナレッジを参照し続けます。
-手順4を飛ばすと、Bot が全質問に対して突っぱね応答を返すようになります。
+`--recreate` deletes and rebuilds the knowledge base, so **the dataset_id changes**.
+The Chatflow's Knowledge Retrieval node stores the dataset_id directly, so without a rebuild it
+keeps pointing at the old, deleted knowledge base. Skip step 4 and the bot refuses every
+question.
 
-### 規程を編集するときの注意
+### Rules for editing the policy
 
-| 守ること | 理由 |
+| Rule | Why |
 |---|---|
-| 条文の見出しは `### 第N条（...）` 形式を維持 | この見出しでチャンクを分割している（§3-3 ①） |
-| 1つの条文は 1,400 文字以内に収める | 超えると条文が途中で分断され、検索精度が落ちる |
-| 連絡先のメールアドレスを本文に残す | 突っぱね応答で Citation する設計のため |
+| Keep clause headings in the form `### 第N条（...）` (Article N) | Chunks are split on these headings (§3-3 ①) |
+| Keep each clause within 1,400 characters | Longer clauses get cut mid-way and retrieval quality drops |
+| Keep the contact e-mail address in the text | The refusal message cites it |
 
-条文が 1,400 文字を超える場合は、`scripts/provision_knowledge.py` の
-`PARENT_MAX_CHARS` を引き上げてください。文字数は次で確認できます：
+If a clause exceeds 1,400 characters, raise `PARENT_MAX_CHARS` in
+`scripts/provision_knowledge.py`. To check clause lengths:
 
 ```bash
 python3 -c "
@@ -132,157 +133,157 @@ for part in re.split(r'(?m)^(?=### )', text):
 " | sort -rn | head -5
 ```
 
-### 改訂後に必ず確認すること
+### What to confirm after every revision
 
-`measure_recall.py` が **Recall@4 >= 90%** を保っていること。
-下回った場合は、新しい条文に合わせて `scripts/measure_recall.py` の `TEST_QUERIES` を
-更新したうえで再測定してください。テストクエリ自体が古くなっている可能性もあります。
+`measure_recall.py` must stay at **Recall@4 >= 90%**.
+If it falls below that, update `TEST_QUERIES` in `scripts/measure_recall.py` to match the new
+clauses and measure again. The test queries themselves may be out of date.
 
 ---
 
-## 3. 経費精算テンプレート（xlsx）を差し替えるとき
+## 3. Replacing the expense template (xlsx)
 
-### 手順
+### Procedure
 
 ```bash
-# 1. テンプレートを更新（スクリプトから再生成する場合）
+# 1. Update the template (when regenerating it from the script)
 pip install openpyxl
 python3 scripts/build_expense_template.py
 
-# 2. n8n が配信するファイルを差し替え
+# 2. Replace the file n8n serves
 cp 経費精算テンプレート_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
 
-# 3. macOS のみ：拡張属性を除去（重要）
+# 3. macOS only: strip extended attributes (important)
 xattr -c docker/n8n/templates/expense_template_v3.xlsx
 
-# 4. 配信を確認
+# 4. Verify delivery
 curl -s -o /tmp/dl.xlsx -w "%{http_code} %{size_download}\n" \
   http://localhost:5678/webhook/files/expense-v3
 file /tmp/dl.xlsx    # → Microsoft Excel 2007+
 ```
 
-**コンテナの再起動は不要です。** `docker/n8n/templates/` は bind mount なので、
-ホスト側のファイルを置き換えた瞬間に反映されます。
+**No container restart is needed.** `docker/n8n/templates/` is a bind mount, so replacing the
+file on the host takes effect immediately.
 
-### ファイル名を変える場合
+### Changing the file name
 
-ファイル名を変えると3箇所の修正が必要です。**1箇所でも漏れると配信が壊れます。**
+A new file name has to be changed in three places. **Miss one and delivery breaks.**
 
-1. `docker/n8n/templates/` 内の実ファイル名
-2. n8n Workflow 2 の `Read/Write Files from Disk` ノードの File Selector
-   （`/home/node/.n8n-files/<新しい名前>`）
-3. n8n Workflow 2 の `Respond to Webhook` の `Content-Disposition` ヘッダー
-   （日本語名なら RFC 5987 形式。生成方法は §4-8 ④）
+1. The actual file name in `docker/n8n/templates/`
+2. The File Selector of the `Read/Write Files from Disk` node in n8n Workflow 2
+   (`/home/node/.n8n-files/<new name>`)
+3. The `Content-Disposition` header of `Respond to Webhook` in n8n Workflow 2
+   (RFC 5987 form for Japanese names; see §4-8 ④ for how to generate it)
 
-変更後は `python3 scripts/export_n8n_workflows.py` でリポジトリ側の JSON も更新してください。
+Afterwards, run `python3 scripts/export_n8n_workflows.py` to update the JSON in the repository.
 
-> ⚠️ 配置先は必ず `/home/node/.n8n-files` 配下にすること。n8n の allowlist 制約です（§4-8 ①）。
+> ⚠️ The file must live under `/home/node/.n8n-files`. This is n8n's allowlist restriction (§4-8 ①).
 
 ---
 
-## 4. Bot の応答内容を変えたいとき
+## 4. Changing what the bot says
 
-| 変えたいもの | 編集する場所 |
+| What to change | Where to edit |
 |---|---|
-| 回答のトーン・フォーマット・突っぱね文 | `scripts/provision_chatflow.py` の `SYSTEM_PROMPT` |
-| 質問の振り分け基準 | 同 `CLASSIFIER_INSTRUCTION` |
-| ファイル要求時の回答文面 | 同 `FILE_ANSWER_TEMPLATE` |
-| 使用する LLM | 同 `LLM_MODEL` |
-| 検索件数・閾値 | `scripts/provision_knowledge.py` の `TOP_K` / `SCORE_THRESHOLD` |
+| Answer tone, format, refusal message | `SYSTEM_PROMPT` in `scripts/provision_chatflow.py` |
+| How questions are routed | `CLASSIFIER_INSTRUCTION` in the same file |
+| The reply to a file request | `FILE_ANSWER_TEMPLATE` in the same file |
+| The LLM used | `LLM_MODEL` in the same file |
+| Number of results and threshold | `TOP_K` / `SCORE_THRESHOLD` in `scripts/provision_knowledge.py` |
 
-編集後：
+After editing:
 
 ```bash
 python3 scripts/provision_chatflow.py --recreate
 python3 scripts/test_e2e.py
 ```
 
-> 💡 Dify の管理画面から直接編集することもできますが、その変更はスクリプトに残りません。
-> 次に `--recreate` を流した時点で失われます。**画面で試して、確定したらスクリプトに反映する**
-> という運用を推奨します。画面で作った状態は
-> 「アプリ → 右上メニュー → DSLをエクスポート」で吸い出せます。
+> 💡 You can also edit directly in the Dify admin UI, but those changes are not recorded in the
+> scripts and are lost the next time `--recreate` runs. The recommended practice is to
+> **experiment in the UI, then copy the final version into the script**. You can pull out what
+> you built in the UI via "App → top-right menu → Export DSL".
 
 ---
 
-## 5. バックアップとリストア
+## 5. Backup and restore
 
-### バックアップ対象
+### What to back up
 
-| 対象 | 場所 | 中身 |
+| Target | Location | Contents |
 |---|---|---|
-| Dify PostgreSQL | `<Difyディレクトリ>/docker/volumes/db/data` | アプリ設定・会話ログ・ナレッジのメタデータ |
-| Dify Weaviate | `<Difyディレクトリ>/docker/volumes/weaviate` | ベクトルインデックス |
-| Dify ストレージ | `<Difyディレクトリ>/docker/volumes/app/storage` | アップロードした原本ファイル |
-| n8n | Docker volume `n8n-local_n8n_data` | ワークフロー・認証情報 |
-| テンプレート | `docker/n8n/templates/` | 配信する xlsx |
+| Dify PostgreSQL | `<Dify dir>/docker/volumes/db/data` | App settings, conversation logs, knowledge metadata |
+| Dify Weaviate | `<Dify dir>/docker/volumes/weaviate` | Vector index |
+| Dify storage | `<Dify dir>/docker/volumes/app/storage` | Uploaded source files |
+| n8n | Docker volume `n8n-local_n8n_data` | Workflows, credentials |
+| Template | `docker/n8n/templates/` | The xlsx being served |
 
-Dify 側は bind mount なので**ディレクトリごとコピーするだけ**です。
+The Dify side uses bind mounts, so **copying the directory is all it takes**.
 
-### 手順（コールドバックアップ推奨）
+### Procedure (cold backup recommended)
 
 ```bash
 DIFY_DIR=~/dify-local/docker
 STAMP=$(date +%Y%m%d)
 
-# 1. 停止（整合性を確保するため）
+# 1. Stop (to guarantee consistency)
 cd $DIFY_DIR && docker compose down
-cd <このリポジトリ>/docker/n8n && docker compose down
+cd <this-repo>/docker/n8n && docker compose down
 
-# 2. Dify のデータをコピー
+# 2. Copy Dify's data
 tar czf ~/backup_dify_$STAMP.tar.gz -C $DIFY_DIR volumes
 
-# 3. n8n のボリュームをコピー
+# 3. Copy the n8n volume
 docker run --rm -v n8n-local_n8n_data:/data -v ~:/backup alpine \
   tar czf /backup/backup_n8n_$STAMP.tar.gz -C /data .
 
-# 4. 再起動
+# 4. Restart
 cd $DIFY_DIR && docker compose up -d
-cd <このリポジトリ>/docker/n8n && docker compose up -d
+cd <this-repo>/docker/n8n && docker compose up -d
 ```
 
-### リストア
+### Restore
 
-上記の逆順で展開したあと `docker compose up -d` します。
-リストア後は必ず `python3 scripts/test_e2e.py` で健全性を確認してください。
+Extract in the reverse order, then run `docker compose up -d`.
+After a restore, always confirm health with `python3 scripts/test_e2e.py`.
 
-> 💡 **ナレッジと Chatflow はバックアップが無くても再構築できます**
-> （`provision_knowledge.py` → `provision_chatflow.py`）。
-> 本当に失って困るのは**会話ログ**と**n8n の認証情報**です。
-> 最低限この2つが守れていれば復旧できます。
+> 💡 **The knowledge base and Chatflow can be rebuilt without a backup**
+> (`provision_knowledge.py` → `provision_chatflow.py`).
+> What you really cannot afford to lose is the **conversation logs** and the **n8n credentials**.
+> If those two are safe, you can recover.
 
 ---
 
-## 6. 困ったときの一次切り分け
+## 6. First-line triage
 
-まず `python3 scripts/test_e2e.py` を流してください。どのテストが落ちるかで原因が絞れます。
+Start by running `python3 scripts/test_e2e.py`. Which test fails narrows down the cause.
 
-| 落ちたテスト | 疑う場所 |
+| Failing test | Where to look |
 |---|---|
-| Test 1（規程Q&A）だけ | ナレッジ検索、または OpenAI API |
-| Test 2（ガードレール）だけ | システムプロンプト（意図せず書き換わっていないか） |
-| Test 3（ファイル要求）だけ | n8n、ネットワーク、xlsx の配置 |
-| 全部 | Dify 本体（api / postgres）が落ちている |
+| Only Test 1 (policy Q&A) | Knowledge retrieval, or the OpenAI API |
+| Only Test 2 (guardrail) | The system prompt (has it been changed unintentionally?) |
+| Only Test 3 (file request) | n8n, networking, or where the xlsx is placed |
+| All of them | Dify core (api / postgres) is down |
 
-### 症状別
+### By symptom
 
-| 症状 | 確認すること |
+| Symptom | What to check |
 |---|---|
-| **全質問に「規程に記載が見当たりません」と返る** | ①ナレッジが空になっていないか（`measure_recall.py`）②Chatflow が古い dataset_id を見ていないか（§2の手順4を実行）③OpenAI の Embedding が失敗していないか |
-| **ファイル要求だけ失敗する** | ①`docker ps` で `n8n_local` が動いているか ②ワークフローが Active か ③`ssrf_proxy` が `demo-rag-net` に居るか（§4-8 ⑩） |
-| **ファイル要求の回答が空文字** | Chatflow の Code ノード（`parse_response`）が消えていないか（§4-8 ⑨） |
-| **画面が開かない** | `docker ps` で `docker-nginx-1` と `docker-api-1` が healthy か |
-| **応答が異常に遅い** | OpenAI 側の遅延。`docker compose logs -f api` でリクエスト時間を確認 |
-| **ダウンロードURLが `ERR_NAME_NOT_RESOLVED`** | n8n が返す `download_url` が `localhost:5678` になっているか（`n8n_local:5678` では不可。§4-7） |
+| **Every question gets "no provision found in the policy"** | ① Is the knowledge base empty? (`measure_recall.py`) ② Is the Chatflow pointing at an old dataset_id? (run step 4 of §2) ③ Are OpenAI embeddings failing? |
+| **Only file requests fail** | ① Is `n8n_local` running in `docker ps`? ② Are the workflows Active? ③ Is `ssrf_proxy` on `demo-rag-net`? (§4-8 ⑩) |
+| **The reply to a file request is empty** | Has the Chatflow's Code node (`parse_response`) gone missing? (§4-8 ⑨) |
+| **The UI does not load** | Are `docker-nginx-1` and `docker-api-1` healthy in `docker ps`? |
+| **Responses are unusually slow** | Latency on the OpenAI side. Check request times with `docker compose logs -f api` |
+| **The download URL fails with `ERR_NAME_NOT_RESOLVED`** | Does the `download_url` returned by n8n use `localhost:5678`? (`n8n_local:5678` does not work; §4-7) |
 
-### 復旧の最終手段
+### Last resort
 
-コンテナは壊れてもデータは bind mount / volume に残ります。
+Even if containers break, the data survives in the bind mounts / volumes.
 
 ```bash
 cd ~/dify-local/docker && docker compose down && docker compose up -d
 ```
 
-それでも直らない場合は、ナレッジと Chatflow を作り直してください（データ損失なし・約5分）：
+If that does not fix it, rebuild the knowledge base and Chatflow (no data loss, about 5 minutes):
 
 ```bash
 python3 scripts/provision_knowledge.py --recreate
@@ -292,22 +293,23 @@ python3 scripts/test_e2e.py
 
 ---
 
-## 7. 定期点検（推奨頻度）
+## 7. Routine maintenance (recommended frequency)
 
-| 頻度 | 作業 |
+| Frequency | Task |
 |---|---|
-| 毎営業日 | `python3 scripts/test_e2e.py`（3/3 PASS を確認） |
-| 毎月 | バックアップ取得。`measure_recall.py` で Recall@4 を確認 |
-| 規程改訂時 | §2 の再Embedding手順 |
-| 四半期 | Dify / n8n のバージョン更新を検討（更新前に必ずバックアップ） |
-| 随時 | OpenAI API の利用額を確認 |
+| Every business day | `python3 scripts/test_e2e.py` (confirm 3/3 PASS) |
+| Monthly | Take a backup. Check Recall@4 with `measure_recall.py` |
+| On policy revision | The re-embedding procedure in §2 |
+| Quarterly | Consider upgrading Dify / n8n (always back up first) |
+| As needed | Check OpenAI API spend |
 
-### コストの目安
+### Cost estimate
 
-外部課金は OpenAI のみです。
+OpenAI is the only external charge.
 
-- **Embedding**：規程1本（約6,400文字）の再構築で1回あたり数円程度。改訂時のみ発生
-- **LLM（gpt-4o-mini）**：1質問あたり、システムプロンプト＋検索結果4件で
-  概ね2,000〜4,000トークンの入力。質問数に比例します
+- **Embeddings:** rebuilding for one policy (about 6,400 characters) costs a few yen (well under
+  USD 0.10) per run, and only on revision
+- **LLM (gpt-4o-mini):** each question sends roughly 2,000–4,000 input tokens (system prompt plus
+  four retrieved chunks). Cost scales with the number of questions
 
-正確な単価は OpenAI の料金ページで確認してください。
+Check OpenAI's pricing page for current rates.

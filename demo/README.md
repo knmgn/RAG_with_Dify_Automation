@@ -1,44 +1,47 @@
-# デモ動画の素材
+# Demo Video Assets
 
-撮影台本の本体は設計書 [`../02_dify_chatflow_design.md`](../02_dify_chatflow_design.md) 第6章にあります。
-ここには編集時にそのまま使えるファイルだけを置いています。
+The shooting script itself lives in Chapter 6 of the design doc,
+[`../02_dify_chatflow_design.md`](../02_dify_chatflow_design.md).
+This directory holds only the files you can drop straight into an editor.
 
-| ファイル | 用途 |
+| File | Purpose |
 |---|---|
-| `demo_captions.srt` | 日英併記の字幕。1行目=日本語 / 2行目=英語 |
+| `demo_captions.srt` | Bilingual captions. Line 1 = Japanese, line 2 = English |
 
-## 字幕の使い方
+## Using the captions
 
-### そのまま焼き込む（推奨）
+### Burn them in (recommended)
 
-Premiere Pro / DaVinci Resolve / Final Cut Pro いずれも SRT をそのまま読み込めます。
-読み込み後に**日本語と英語で別スタイルを当てられない**点だけ注意してください
-（SRT はスタイル情報を持たないため、2行が同じ見た目になります）。
+Premiere Pro, DaVinci Resolve and Final Cut Pro all import SRT directly.
+One caveat: **you cannot style the Japanese and English lines differently**.
+SRT carries no style information, so both lines look the same.
 
-日英で見た目を変えたい場合は、キャプショントラックを2本に分けます。
+To style them differently, split the captions into two tracks:
 
 ```bash
-# 日本語だけ / 英語だけの SRT を作る
+# Japanese-only and English-only SRT files
 awk 'BEGIN{RS="";FS="\n"} {print $1"\n"$2"\n"$3"\n"}' demo_captions.srt > captions_ja.srt
 awk 'BEGIN{RS="";FS="\n"} {print $1"\n"$2"\n"$4"\n"}' demo_captions.srt > captions_en.srt
 ```
 
-日本語トラックを下から 120px、英語トラックを下から 70px あたりに置き、
-英語は文字サイズ 75〜80%・やや薄い色にすると主従が伝わります。
+Place the Japanese track about 120px from the bottom and the English track about 70px
+from the bottom. Setting English at 75–80% of the font size, in a slightly lighter colour,
+makes the primary/secondary relationship clear.
 
-### YouTube / Vimeo に字幕トラックとして載せる場合
+### Uploading as caption tracks on YouTube / Vimeo
 
-焼き込みではなく字幕トラックにするなら、`captions_ja.srt` と `captions_en.srt` に
-分割して**言語別にアップロード**してください。併記のまま載せると、
-視聴者が日本語字幕を選んでも英語が一緒に出てしまいます。
+If you upload caption tracks instead of burning them in, split the file into
+`captions_ja.srt` and `captions_en.srt` and **upload one per language**. If you upload
+the bilingual file as-is, viewers who pick Japanese captions also get the English line.
 
-> 💡 ポートフォリオ用途では**焼き込み**を推奨します。ココナラやUpworkの一覧では
-> 音声オフ・字幕オフで自動再生されることが多く、字幕トラックは表示されません。
+> 💡 For portfolio use, **burning in** is recommended. Listing pages on Coconala and Upwork
+> often autoplay with sound and captions off, so caption tracks are never shown.
 
-## タイムコードについて
+## Timecodes
 
-`demo_captions.srt` の秒数は台本上の設計値です。実際の収録尺に合わせて、
-編集ソフト側でクリップごとにドラッグして微調整してください。
+The timings in `demo_captions.srt` are the values planned in the script.
+Drag each clip in your editor to match the length of the actual recording.
 
-特にショット1（0:00-0:08）は実機の応答時間（1.7秒）を前提にしています。
-撮影時に間が空いた場合は、字幕1と2の切り替わりを実際の表示タイミングに合わせます。
+Shot 1 (0:00–0:08) in particular assumes the measured response time of 1.7 seconds.
+If the recording has a longer pause, move the switch between captions 1 and 2 to when the
+answer actually appears on screen.

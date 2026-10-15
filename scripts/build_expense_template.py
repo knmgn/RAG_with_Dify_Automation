@@ -1,8 +1,9 @@
 """
-経費精算テンプレート_v3.xlsx ビルドスクリプト
+Build script for 経費精算テンプレート_v3.xlsx (expense report template v3).
 
-株式会社デモ・ロジスティクス 旅費交通費・経費精算規定（DL-HR-RG-2024-007）に
-準拠したダミーの経費精算 Excel テンプレートを生成する。
+Generates a dummy Excel expense report template that complies with Demo Logistics
+Inc.'s Travel & Expense policy (DL-HR-RG-2024-007). The sheet contents are in
+Japanese on purpose: this is the file the bot hands to Japanese-speaking employees.
 
 Usage:
     python3 scripts/build_expense_template.py

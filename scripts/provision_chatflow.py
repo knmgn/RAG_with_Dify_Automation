@@ -9,10 +9,13 @@ the exported DSL to `dify/chatflow_dsl.yaml` as the §7 deliverable.
 
 Requires provision_knowledge.py to have run first (it needs the dataset id).
 
-Graph:
+Graph (node titles are Japanese because they show in the Dify UI the demo uses):
 
     [開始] → [インテント分類] ─ 規程Q&A ──→ [ナレッジ検索] → [回答生成] → [回答]
                              └ ファイル要求 → [n8n Webhook] → [ファイル回答]
+
+    [Start] → [Intent classifier] ─ policy Q&A ──→ [Knowledge retrieval] → [LLM] → [Answer]
+                                  └ file request → [n8n Webhook] → [File answer]
 """
 
 from __future__ import annotations
@@ -422,7 +425,7 @@ def main() -> int:
     path = env.get("N8N_INTENT_DISPATCHER_PATH", "").strip("/")
     if not path:
         raise SystemExit("[FAIL] N8N_INTENT_DISPATCHER_PATH is not set in scripts/.dify_admin.env")
-    # §4-7 "URLの二刀流": Dify reaches n8n by its Docker service name, never localhost.
+    # §4-7 "two URLs" design: Dify reaches n8n by its Docker service name, never localhost.
     webhook_url = f"http://n8n_local:5678/webhook/{path}"
 
     console = connect(env)

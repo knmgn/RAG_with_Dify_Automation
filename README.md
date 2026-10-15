@@ -1,203 +1,339 @@
-# Dify × n8n ポートフォリオデモ素材
+# Enterprise RAG Automation with Dify & n8n
 
-ココナラ／Upwork向けポートフォリオ（見本）として、「Dify（高精度RAG）×n8n（実務自動化）」のデモ動画を撮影するための素材一式。
+**A policy assistant that answers only from your internal rules, cites the clause it used, and refuses rather than guesses. It also runs the business process behind the question.**
 
----
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![Dify](https://img.shields.io/badge/Dify-Self--Hosted-1C64F2)
+![n8n](https://img.shields.io/badge/n8n-Workflow_Automation-EA4B71?logo=n8n&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![Weaviate](https://img.shields.io/badge/Weaviate-Hybrid_Search-00C29A)
+![OpenAI](https://img.shields.io/badge/OpenAI-gpt--4o--mini-412991?logo=openai&logoColor=white)
+![Enterprise AI](https://img.shields.io/badge/Enterprise_AI-Zero--Hallucination_RAG-111827)
 
-## Targeted Use Case for Japanese SMEs (English Summary for Global Clients)
-
-> The portfolio below is intentionally localized to **Japanese small and medium-sized enterprises (SMEs)** and their back-office (HR / expense / labor compliance) operations. This English section exists so international buyers (Upwork) can evaluate the portfolio without reading Japanese.
-
-**Problem domain — why Japanese SMEs?**
-Japanese SMEs (especially in logistics, manufacturing, construction, and professional services) operate under an unusually heavy back-office burden:
-
-- **Hyper-detailed internal rules** that no employee can memorize — e.g. taxi reimbursement only after 23:00, JPY 15,000 caps with a dedicated "excess justification form (F-021)" requiring two-manager approval, distinct lodging caps for the 23 wards of Tokyo vs. other cities, last-train screenshots as evidence.
-- **Hard deadlines enforced by social cost** — late expense submissions trigger formal incident reports (始末書 / *shimatsu-sho*) and HR performance deductions, which discourages employees from asking clarifying questions and increases compliance errors.
-- **Single-point-of-failure ownership** — one named individual in the General Affairs department (*Soumu-bu*) typically owns dozens of unrelated workflows (insurance card reissuance, shift filings, template distribution).
-- **Severe orthographic variation** — employees ask in colloquial Japanese ("深夜帰りのタクシー代いくら？") while policies are written in formal legal-style Japanese ("業務終了時刻が23:00を超え"), making naïve keyword search useless.
-- **Tool fragmentation** — files on Google Drive / shared drives, conversations on Slack / Teams / Chatwork, approvals in yet another workflow system.
-
-**What this portfolio demonstrates**
-A reusable architecture (**Dify high-precision RAG + n8n executable automation**) that:
-
-1. Deflects 60–80% of repetitive HR / expense questions away from the General Affairs bottleneck, *while preserving citation trails required for Japanese audit and labor-compliance culture*.
-2. Enforces a **zero-hallucination boundary** — when the policy is silent, the bot refuses to improvise and instead names the responsible owner (in this demo: "Mr. Sato, ext. 1234"), matching the Japanese cultural expectation of clear accountability (責任の所在 / *sekinin no shozai*).
-3. Goes beyond Q&A — the "send me the expense template" intent triggers n8n to fetch the file from a local share, log the request, and respond to the user with a download URL. **Chatbot → automation system.**
-4. **Ships an all-local, closed-network deployment option** (`docker/`) where every byte stays inside the customer's server. For Japanese SMEs paranoid about data leaving the building, this is decisive — see deliverable #4 below.
-
-**Reusability beyond Japan**
-The same Chatflow topology (Classifier → Hybrid Retrieval → Guardrailed LLM → Webhook) ports to US/EU SMEs, multilingual manufacturing in Southeast Asia, and healthcare/legal firms. Only two layers need localization: the knowledge corpus, and the system-prompt language plus deflection contact. The graph topology, intent classifier, n8n integration pattern, and Slack Block Kit payload remain unchanged — and this portability is the core value proposition.
-
-**Measured, not asserted**
-The whole environment is provisioned through Dify's API rather than by clicking through the admin UI (`scripts/`), so it is reproducible and the numbers below are re-runnable on any machine:
-
-- **Recall@4 = 100%** on the ten test queries in the design doc (`scripts/measure_recall.py`)
-- **3/3 end-to-end tests pass** — policy Q&A, refusal on out-of-scope questions, and file delivery through n8n (`scripts/test_e2e.py`)
-- **OpenAI is the only external egress.** Retrieval ranking runs inside Weaviate (Hybrid Search + Weighted Score), so no third-party reranking service ever sees the customer's questions or policy text.
-- Section §4-8 of the design doc documents **11 concrete failure modes** found while building this for real — the kind that fail silently rather than raising an error.
+> **Demo tenant:** *Demo Logistics Inc.*, a fictional logistics company, and its
+> **Travel & Expense / HR Procedures policy (DL-HR-RG-2024-007, rev. 3)**.
+> All companies, people, addresses and phone numbers in this repository are made up.
 
 ---
 
-## 成果物
+## Overview
 
-### 1. ダミー社内マニュアル（PDF化用テキスト）
-[`01_dummy_manual_demo_logistics.md`](./01_dummy_manual_demo_logistics.md)
+Most "chat with your documents" bots fail enterprise review for the same two reasons:
 
-株式会社デモ・ロジスティクスの「旅費交通費・経費精算および労務手続き規定（DL-HR-RG-2024-007）」のダミー本文。
-- 第1章 総則
-- 第2章 旅費交通費規定（タクシー代の細則、超過理由書、NG事例）
-- 第3章 経費精算の手続き（25日必着、テンプレート v3、遅延始末書）
-- 第4章 福利厚生・労務手続き（夜勤手当、深夜シフト申請、保険証紛失時の窓口）
-- 第5章 雑則
-- 別表1：申請フォーマット一覧
-- 別表2：問い合わせ窓口
+1. **They improvise.** When the policy is silent, a general-purpose LLM fills the gap with plausible
+   general knowledge ("Under labor law, you are typically entitled to…"). In HR, finance and
+   compliance, a confident wrong answer costs more than no answer, because employees act on it.
+2. **They cannot show their work.** An answer without a traceable source cannot be audited, so
+   Legal and Internal Audit will not sign off on it.
 
-**PDF化の手順例：**
-```bash
-pandoc 01_dummy_manual_demo_logistics.md \
-  -o 01_dummy_manual_demo_logistics.pdf \
-  --pdf-engine=wkhtmltopdf \
-  -V CJKmainfont="Noto Sans CJK JP"
+This project is a reference architecture that treats both as hard requirements rather than
+prompt-tuning afterthoughts:
+
+| Enterprise requirement | How this architecture meets it |
+|---|---|
+| **No hallucinated policy** | Two independent guardrails: a retrieval score threshold filters noise, and a strict system prompt forces a fixed refusal whenever the retrieved context does not contain the answer. |
+| **Auditability** | Every answer ends with a mandatory citation block (policy ID, chapter / article / clause, revision date). Amounts and deadlines are quoted verbatim. |
+| **Data governance** | Fully self-hosted Dify + n8n on Docker. Retrieval ranking runs inside Weaviate, and **OpenAI (embeddings + LLM) is the only external egress**. No third-party reranker ever sees employee questions or policy text. |
+| **Accountability** | Out-of-scope questions and exception requests are handed to a named human owner instead of being decided by the model. |
+| **Beyond Q&A** | Requests such as "send me the expense template" are classified as actions and executed through an authenticated n8n webhook. The chatbot becomes an automation front-end. |
+| **Reproducibility** | The knowledge base and Chatflow are provisioned by script through Dify's API instead of by clicking through the admin UI, so every number below can be re-measured. |
+
+### Measured, not asserted
+
+| Metric | Result | How to reproduce |
+|---|---|---|
+| Retrieval **Recall@4** on the 10 design-doc test queries | **10/10 = 100%** | `python3 scripts/measure_recall.py --threshold 0.3` |
+| End-to-end tests (policy Q&A, refusal, file delivery via n8n) | **3/3 pass** | `python3 scripts/test_e2e.py` |
+| n8n connectivity chain (host → n8n, Dify → n8n, WF1, WF2) | **4/4 pass** | `./docker/test/test_webhook.sh` |
+| Top retrieval score, in-scope vs. out-of-scope queries | `0.36–0.64` vs. `0.21–0.38` | `python3 scripts/measure_recall.py` |
+
+The last row matters. The two score ranges **overlap**, so a score threshold alone can never be an
+anti-hallucination guardrail. That observation drives the two-layer design below.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    U(["👤 Employee"]) -->|"natural-language question"| CH["Chat channel<br/>Dify Web App / Service API"]
+    CH --> QC{"Question Classifier<br/>(intent detection)"}
+
+    subgraph RAG["Policy Q&A path"]
+        direction TB
+        KR["Hybrid Retrieval<br/>Vector 0.7 + BM25 0.3<br/>Weighted Score in Weaviate<br/>Top-K 4"]
+        TH{"Score threshold<br/>≥ 0.3"}
+        LLM["LLM · gpt-4o-mini<br/>strict system prompt"]
+        GR{"Is the answer in<br/>&lt;context&gt;?"}
+        ANS["✅ Grounded answer<br/>+ mandatory citation<br/>(policy ID · article · revision)"]
+        FB["🛡️ Fixed fallback message<br/>Zero-Hallucination Guardrail"]
+        KR --> TH
+        TH -->|"relevant chunks only"| LLM
+        LLM --> GR
+        GR -->|"yes"| ANS
+        GR -->|"no / weak context"| FB
+    end
+
+    subgraph AUTO["Action path"]
+        direction TB
+        HTTP["HTTP Request node<br/>X-Auth-Token header"]
+        WF1["n8n · Workflow 1<br/>Intent Dispatcher"]
+        CODE["Code node<br/>parse JSON response"]
+        FA["📎 Reply with download link,<br/>deadline and policy reference"]
+        WF2["n8n · Workflow 2<br/>File Server (xlsx)"]
+        HTTP --> WF1 --> CODE --> FA
+        FA -.->|"user clicks link"| WF2
+    end
+
+    QC -->|"Class 1: policy question"| KR
+    QC -->|"Class 2: file request"| HTTP
+
+    ANS --> CH
+    FA --> CH
+    FB --> CH
+    FB -.->|"escalate"| H(["🧑‍💼 Named policy owner<br/>General Affairs"])
+
+    classDef guard fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef ok fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef auto fill:#e0e7ff,stroke:#4f46e5,color:#1e1b4b
+    class FB,GR,TH guard
+    class ANS ok
+    class HTTP,WF1,CODE,FA,WF2 auto
 ```
-または、VSCode / Typora / Obsidian で開いて「PDFエクスポート」でも可。
 
-### 2. Dify Chatflow 設計書
-[`02_dify_chatflow_design.md`](./02_dify_chatflow_design.md)
+**Deployment topology.** Everything runs on one Docker host. Dify (`api`, `worker`, `ssrf_proxy`)
+and n8n share a private Docker network (`demo-rag-net`). Dify reaches n8n by service name
+(`http://n8n_local:5678`), and outbound HTTP from Chatflows goes through Dify's squid SSRF proxy,
+which is explicitly allow-listed for `n8n_local`. The browser downloads files through the published
+host port, a deliberate "two URLs" design documented in [`docker/README.md`](./docker/README.md).
 
-上記マニュアルをナレッジに食わせる Dify Bot の設計書。
-- **Targeted Use Case for Japanese SMEs**（冒頭の英文セクション — 海外クライアント向け）
-- システムプロンプト（ハルシネーション抑制ガードレール、Citation強制）
-- ハイブリッド検索（Vector + Keyword）× Weighted Score の設定
-- Question Classifier による Intent 検出
-- **3つのn8n連携パターン**：
-  - §4-1 フル版（Drive + Slack API連携、50名以上の組織向け）
-  - §4-6 シンプル版（Google Drive リンク共有のみ、PoC向け）
-  - **§4-7 完全ローカルDocker版（中小企業向け本命、外部送信は OpenAI のみ）** ← 推奨
-- §4-8 実装中に発見した運用ノウハウ**11件**
-  - ①〜④ n8n / Docker / macOS 側（allowlist / Webhook Respond モード / xattr / RFC 5987）
-  - ⑤〜⑪ Dify 側（区切り文字の文字化け / `.md` 投入でチャンク設定が無効化 / Rerank APIの無音失敗 /
-    コンテキスト変数の誤記 / HTTP Requestのbodyは文字列 / **ssrf_proxy経由の通信** / 日本語BM25）
-- テストクエリ集と**実測 Recall@4**、デモ動画台本、納品チェックリスト
+---
 
-> 💡 設計書は v1.5 で**実機検証を反映済み**です。v1.4 までの机上設計のうち、
-> 実際には動作しなかった記述は本文を修正したうえで、
-> 「何がなぜ違ったか」を §4-8 に検証記録として残しています。
+## Key Features
 
-### 3. ダミー経費精算テンプレート（Excel）
-[`経費精算テンプレート_v3.xlsx`](./経費精算テンプレート_v3.xlsx) ／ [`scripts/build_expense_template.py`](./scripts/build_expense_template.py)
+### 🛡️ Zero-Hallucination Guardrails (strict fallback routing)
+- **Layer 1, retrieval:** a score threshold of `0.3` drops low-relevance chunks before they reach the
+  LLM. The value was **measured, not picked**: it sits below every correct hit with margin while
+  cutting 3 of 4 out-of-scope queries. The commonly recommended `0.5` was tested and rejected
+  because it discarded most correct answers under Weighted Score.
+- **Layer 2, generation:** the system prompt forbids inference, general legal or tax commentary,
+  hedging words ("probably", "generally") and invented article numbers. If `<context>` does not
+  contain the answer, the model must return **one fixed fallback message, word for word**.
+- Because the two layers fail independently, a borderline chunk that slips past the threshold still
+  cannot produce an invented answer.
 
-規程 DL-HR-RG-2024-007 に準拠したダミーの Excel テンプレート。Question Classifier が「ファイル要求」を検出した際に Dify が返す、Google Drive 上の配布対象ファイル。
+### 📑 Source Citation & Provenance Tracking
+- Every answer uses a fixed three-block format: **Conclusion → Details → Source**.
+- The Source block names the policy ID, the chapter / article / clause and the revision date.
+- Amounts, deadlines and conditions must be quoted **verbatim** from the policy, for example
+  `JPY 15,000 per ride (tax included)`.
+- Knowledge chunks carry six metadata fields (`doc_id`, `doc_title`, `doc_version`, `last_revised`,
+  `doc_type`, `category`) so provenance survives re-indexing when the policy is revised.
 
-含まれるシート：
-- **経費精算書**：申請者情報、9件のサンプル明細、SUM 数式での自動集計、仮払金控除、5者承認欄
-- **タクシー利用明細**：規程第5条準拠の乗車時刻・降車時刻・F-021 ステータス記録欄
-- **仮払い精算**：仮払金と実費の差額自動計算
-- **区分マスタ**：ドロップダウン用の13区分と勘定科目・規程参照
-- **記入要領**：提出期限・タクシー上限・領収書ルール・問い合わせ窓口
+### 🔎 Hybrid Search (Vector + BM25)
+- **Semantic (0.7) + keyword (0.3)** weighting. Vector search handles colloquial phrasing
+  ("how much for a late-night taxi?"), and BM25 catches exact identifiers that embeddings miss:
+  form numbers such as `F-021`, file names, policy codes.
+- **Parent-Child chunking:** 250-character child chunks for precise matching and 1,400-character
+  parent chunks so each answer gets the full clause. The parent size was raised from the design value
+  of 1,200 after measurement showed the longest clause being cut in half.
+- **Weighted Score ranking runs inside Weaviate.** A hosted reranker was evaluated and dropped. It
+  added a second data-egress vendor, gave no recall gain, and returned *zero results with no error*
+  when rate-limited, which is a silent failure mode you do not want in production.
 
-#### 再生成手順
-```bash
-pip install openpyxl
-python3 scripts/build_expense_template.py
+### 🤝 Human-in-the-Loop (HITL) Workflow Integration
+- **Human escalation:** the fallback message routes the employee to a **named owner and contact
+  channel** in General Affairs. Requests to bend the rules ("can you make an exception?") are always
+  sent to a human, never decided by the model.
+- **Action execution:** a Question Classifier separates *questions* from *requests*. File requests
+  call an **authenticated n8n webhook** (shared-secret `X-Auth-Token`), which returns a structured
+  payload (download URL, submission deadline, macro warning, policy reference) that Dify renders
+  into the reply.
+- The n8n side is a plain webhook contract, so it can be pointed at ticketing, approval flows or a
+  chat platform without touching the Dify graph.
+
+### ⚙️ Infrastructure as Code for the RAG layer
+- `scripts/` provisions the knowledge base and the Chatflow through Dify's Console API, using only
+  the Python standard library (no `pip install` required).
+- The exported Chatflow DSL (`dify/chatflow_dsl.yaml`, secrets stripped) can be imported into any
+  Dify instance.
+- n8n workflow exports are sanitized by `scripts/export_n8n_workflows.py`, which strips the owner's
+  e-mail address that `n8n export:workflow` embeds by default.
+
+---
+
+## Prompt Engineering (System Message)
+
+The production prompt is written in Japanese, the language of the demo policy and its users. Below
+is a faithful English translation of the prompt deployed in
+[`scripts/provision_chatflow.py`](./scripts/provision_chatflow.py). It is included to show how
+tightly the model is constrained.
+
+```text
+# Role
+You are "Demo-Logi-Bot", an internal assistant for Demo Logistics Inc.
+You answer employee questions on travel, expenses and HR procedures strictly on the
+basis of the provided <context> (Internal Rules DL-HR-RG-2024-007).
+
+# Non-negotiable rules
+1. Always base your answer on the knowledge inside the <context> tag.
+2. If the context does not contain the answer, or its relevance is low, NEVER guess,
+   assume, or fill the gap with general knowledge. Instead, reply with exactly this
+   fallback message:
+
+   "No explicit provision covering your question was found in the internal rules
+    (DL-HR-RG-2024-007). Please contact Mr. Sato in General Affairs directly
+    (ext. 1234 / sato.kenichi@demo-logistics.example.co.jp)."
+
+3. Even for general legal, tax or labor questions, use the fallback message unless the
+   internal rules address the point directly. General explanations such as
+   "Under the Labor Standards Act..." are prohibited.
+4. Quote amounts, deadlines and conditions from <context> verbatim, character for
+   character (e.g. "JPY 15,000 per ride (tax included)").
+5. If the user asks for an exception or a change to the rules, state that you have no
+   authority to decide and direct them to General Affairs.
+
+# Output format (mandatory)
+[Conclusion]  A direct answer in 1-3 sentences; list amounts, conditions and deadlines.
+[Details]     Supporting explanation based on the relevant clause, including any
+              prohibited cases or exceptions.
+[Source]      - Policy: Demo Logistics Inc. Travel & Expense and HR Procedures
+                (DL-HR-RG-2024-007)
+              - Section: Chapter X, Article X, Clause X (topic)
+              - Last revised: 2024-10-01 (rev. 3)
+
+# Prohibited
+- Amounts, deadlines, names or departments not grounded in the knowledge base
+- Reusing earlier answers instead of consulting the knowledge base each time
+- Hedging language: "probably", "generally", "I think"
+- Inventing policy numbers or article numbers
+
+# Input
+User question: {{#sys.query#}}
+<context>
+{{#context#}}
+</context>
 ```
 
-#### Google Drive へのアップロード手順（シンプル運用版）
-1. `経費精算テンプレート_v3.xlsx` を社内共有ドライブにアップロード
-2. 「共有」→「リンクを知っている全員」→ 権限「閲覧者」に設定
-3. コピーした URL を Dify の環境変数 `EXPENSE_TEMPLATE_URL` に登録
-4. 設計書 §4-6 の Answer ノード文言をコピペで投入
+**Design notes**
+- The fallback is a **single fixed string**, so a refusal is easy to test. `scripts/test_e2e.py`
+  asks an out-of-scope question and asserts that the reply routes to the named owner and extension.
+- The context placeholder is `{{#context#}}`. The design doc originally used `{{#context.result#}}`,
+  which Dify never substitutes, so the model would have received a literal placeholder and
+  answered with no knowledge at all. That is one of the **12 implementation pitfalls** documented in
+  §4-8 of the design doc.
 
-### 4. ローカルDocker環境一式（完全社内完結 PoC スタック）
-[`docker/`](./docker/) ディレクトリ
+---
 
-**中小企業案件の本命**：Dify Self-Hosted + n8n + 共有Dockerネットワークで、データを一切外部に出さずに動作する完全ローカル構成のPoC環境。設計書 §4-7 / §4-8 の参照実装。
+## Tech Stack
 
-含まれるファイル：
-- `docker/README.md` ─ `git clone` → `docker compose up -d` 一発で動く手順書
-- `docker/n8n/docker-compose.yml` ─ n8n 本体 + xlsx volume + 共有network参加済み
-- `docker/n8n/templates/.gitkeep` ─ xlsx 配置先（設計書 §4-8 ① の allowlist 制約に準拠）
-- `docker/n8n/workflows/*.json` ─ ワークフロー2本のエクスポート（そのままインポート可能）
-- `docker/dify/docker-compose.override.yaml` ─ Dify公式に重ねる差分（Dify本体は触らない）。api / worker / **ssrf_proxy** の共有ネットワーク参加と、squid の宛先許可設定
-- `docker/test/test_webhook.sh` ─ 4段階の疎通テストスクリプト（host→n8n / Dify→n8n / Workflow1全体 / Workflow2バイナリ応答）
+- **Orchestration / RAG:** Dify (Self-Hosted), Chatflow with Question Classifier, Knowledge Retrieval, LLM, HTTP Request and Code nodes
+- **LLM:** OpenAI `gpt-4o-mini`
+- **Embeddings:** OpenAI `text-embedding-3-large`
+- **Vector store / search:** Weaviate, Hybrid Search (vector + BM25) with Weighted Score ranking
+- **Workflow automation:** n8n (Webhook, Switch, Respond to Webhook, Read/Write Files from Disk)
+- **Infrastructure:** Docker Compose, shared Docker network, squid SSRF proxy allow-listing
+- **Tooling:** Python 3.10+ standard library (provisioning, recall measurement, E2E tests), `openpyxl` (template generator)
+- **Security:** shared-secret webhook authentication, secrets kept in gitignored env files, SOPS config for encrypted secrets
 
-#### クイックスタート（要約）
+---
+
+## Quick Start / How to Run
+
+### Prerequisites
+- Docker with Compose v2 (4 GB RAM minimum, 8 GB recommended), ports `80` and `5678` free
+- Tested on macOS and Linux
+- Python 3.10+
+- An OpenAI API key, registered in Dify under **Settings → Model Provider** after first login
+
+### 1. Create the shared network and start Dify
+
 ```bash
 docker network create demo-rag-net
 
-# Dify Self-Hosted 起動
 git clone https://github.com/langgenius/dify.git ~/dify-local
 cp docker/dify/docker-compose.override.yaml ~/dify-local/docker/
-cd ~/dify-local/docker && cp .env.example .env && docker compose up -d
-
-# n8n 起動
-cd <この repo>/docker/n8n
-cp ../../経費精算テンプレート_v3.xlsx ./templates/expense_template_v3.xlsx
-xattr -c ./templates/expense_template_v3.xlsx   # macOS のみ
-docker compose up -d
-
-# 疎通テスト
-export N8N_WEBHOOK_TOKEN="<your token>"
-./docker/test/test_webhook.sh
+cd ~/dify-local/docker
+cp .env.example .env          # see docker/dify.env.example for the values this demo uses
+docker compose up -d          # first start pulls images and takes 5-10 minutes
 ```
 
-詳細は [`docker/README.md`](./docker/README.md) を参照。
-
-### 5. Dify 構築自動化スクリプト
-[`scripts/`](./scripts/) ／ [`dify/chatflow_dsl.yaml`](./dify/chatflow_dsl.yaml)
-
-Dify のナレッジと Chatflow を、**管理画面を一切触らずに** Console API 経由で構築するスクリプト群。
-規程が改訂されたときの作り直しも、クライアント環境への再現配備も、コマンド1本で済む。
-
-| ファイル | 役割 |
-|---|---|
-| `scripts/dify_console.py` | Dify Console API クライアント（Python標準ライブラリのみ、`pip install` 不要） |
-| `scripts/provision_knowledge.py` | ナレッジ構築（Parent-Child分割・Hybrid Search・メタデータ6項目） |
-| `scripts/provision_chatflow.py` | Chatflow構築（DSL生成 → import → publish → YAMLエクスポート） |
-| `scripts/measure_recall.py` | 設計書 §3-4 のテストクエリで Recall@4 を実測 |
-| `scripts/test_e2e.py` | E2Eテスト（規程Q&A／ガードレール／ファイル要求→n8n→ダウンロード） |
+### 2. Start n8n and import the workflows
 
 ```bash
-cp scripts/.dify_admin.env.example scripts/.dify_admin.env   # DIFY_PASSWORD を記入
-python3 scripts/provision_knowledge.py
-python3 scripts/provision_chatflow.py
-python3 scripts/measure_recall.py --threshold 0.3   # → Recall@4 = 10/10 = 100%
-python3 scripts/test_e2e.py                          # → All 3 end-to-end tests passed
+cd <this-repo>
+cp 経費精算テンプレート_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
+xattr -c docker/n8n/templates/expense_template_v3.xlsx   # macOS only
+cd docker/n8n && docker compose up -d
 ```
 
-`dify/chatflow_dsl.yaml` は上記で生成された Chatflow の DSL（secret 除外済み）。
-Dify の「DSLインポート」からそのまま読み込める。
+Import `docker/n8n/workflows/*.json` in the n8n UI (`http://localhost:5678`), create a
+**Header Auth** credential named `X-Auth-Token` with a random secret, and activate both workflows.
 
-`scripts/export_n8n_workflows.py` は n8n のワークフローを `docker/n8n/workflows/` に書き出す。
-`n8n export:workflow` の生出力には `shared` ブロックに**所有者のメールアドレス**が含まれるため、
-公開リポジトリにそのままコミットできない。このスクリプトが除去する。
+### 3. Configure environment variables
 
-### 6. 運用マニュアル
-[`03_operations_manual.md`](./03_operations_manual.md)
+```bash
+cp scripts/.dify_admin.env.example scripts/.dify_admin.env
+```
 
-構築後の運用担当者向け。起動停止、**規程改訂時の再Embedding手順**、xlsxテンプレートの差し替え、
-バックアップとリストア、症状別の一次切り分け、定期点検の頻度とコストの目安。
+| Variable | Purpose |
+|---|---|
+| `DIFY_BASE_URL` | Dify front door, `http://localhost` by default |
+| `DIFY_EMAIL` / `DIFY_PASSWORD` | Dify admin account used by the provisioning scripts |
+| `N8N_WEBHOOK_TOKEN` | Shared secret sent from Dify to n8n. Leave blank to read it from the n8n container. |
+| `N8N_INTENT_DISPATCHER_PATH` | Webhook path of Workflow 1 (Intent Dispatcher) |
 
-### 7. API サンプル集
-[`04_api_examples.md`](./04_api_examples.md)
+`scripts/.dify_admin.env` is gitignored. No API keys are hard-coded anywhere in the repository.
 
-Bot を既存の社内システムに組み込む開発者向けの curl / Postman コレクション。
-規程Q&A（blocking / streaming）、会話の継続、ファイル要求、n8n の直接呼び出し、
-ヘルスチェック、本番組み込み時の注意点。**全コマンド実機で応答を確認済み**。
+### 4. Provision, measure, test
 
-## 使い方
+```bash
+./docker/test/test_webhook.sh                       # n8n chain: 4/4 PASS
+python3 scripts/provision_knowledge.py              # knowledge base + hybrid retrieval
+python3 scripts/provision_chatflow.py               # Chatflow: import, publish, export DSL
+python3 scripts/measure_recall.py --threshold 0.3   # Recall@4 = 10/10
+python3 scripts/test_e2e.py                         # 3/3 end-to-end tests
+```
 
-1. `docker/README.md` の手順でローカル環境（Dify Self-Hosted + n8n）を起動
-2. `経費精算テンプレート_v3.xlsx` を配布手段に応じて配置
-   - 完全ローカル（推奨）：`docker/n8n/templates/expense_template_v3.xlsx` に配置
-   - シンプル版：Google Drive にアップロード（リンク共有設定）
-   - フル版：Google Drive + Slack 連携の API 設定
-3. n8n のワークフローを設計書 §4-7 ②（完全ローカル）or §4-2（フル版）の通り構築
-4. `docker/test/test_webhook.sh` で n8n 側の4段階疎通テスト
-5. `scripts/provision_knowledge.py` → `scripts/provision_chatflow.py` で Dify 側を構築
-   （手動で組む場合は `02_dify_chatflow_design.md` の設定値を参照）
-6. `scripts/measure_recall.py` と `scripts/test_e2e.py` で品質を実測
-7. デモ動画台本（設計書の第6章）に沿って撮影
+Then open the published app in Dify and try:
 
-## ライセンス
+| Ask | Expected behavior |
+|---|---|
+| "How much can I claim for a late-night taxi?" | Cap quoted verbatim + citation to the taxi clause |
+| "What does labor law say about overtime pay?" | Fixed fallback message + escalation contact |
+| "Send me the expense report template." | n8n webhook fires, reply includes a working download link |
 
-このダミー素材は架空のものです。実在の企業・人物・住所・電話番号とは一切関係ありません。
+> The demo corpus and the bot's replies are in Japanese, because the use case targets Japanese
+> back-office teams. The pipeline is language-agnostic. Localizing it means swapping the knowledge
+> corpus and the system prompt, while the graph, classifier, webhook contract and guardrails stay
+> unchanged.
+
+---
+
+## Repository Layout
+
+| Path | Contents |
+|---|---|
+| `01_dummy_manual_demo_logistics.md` | Demo policy corpus (DL-HR-RG-2024-007) |
+| `02_dify_chatflow_design.md` | Full design doc: prompt, classifier, retrieval tuning, n8n patterns, 12 documented implementation pitfalls |
+| `03_operations_manual.md` | Operations runbook: re-embedding on policy revision, backup/restore, troubleshooting |
+| `04_api_examples.md` | curl / Postman examples for integrating the bot into existing systems |
+| `dify/chatflow_dsl.yaml` | Exported Chatflow DSL (secrets stripped) |
+| `docker/` | Self-hosted stack: n8n compose, Dify override, workflows, connectivity test |
+| `scripts/` | Provisioning, recall measurement, E2E tests, template generator, n8n export sanitizer |
+| `demo/` | Bilingual captions for the 60-second demo video |
+
+---
+
+## Roadmap
+
+- **Slack front-end:** Slack Events API → n8n → Dify Service API → threaded Slack reply, with the
+  fallback path opening a ticket for the policy owner (approve / answer from Slack).
+- **Approval-gated actions:** route exception requests to a manager for one-click approval before
+  any action runs.
+- **Answer feedback loop:** collect 👍/👎 in the chat channel and feed low-rated questions back into
+  the test set used by `measure_recall.py`.
+
+---
+
+*All data in this repository is fictional and was created for demonstration purposes.*

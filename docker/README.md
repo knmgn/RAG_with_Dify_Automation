@@ -1,23 +1,23 @@
-# Local Docker Stack — Dify Self-Hosted × n8n × ローカルファイル配信
+# Local Docker Stack — Dify Self-Hosted × n8n × Local File Delivery
 
-> **完全社内完結構成**：データを一切外部クラウドに出さずに、Dify高精度RAGとn8n業務自動化を組み合わせた中小企業向けPoC環境一式。設計書 `02_dify_chatflow_design.md` §4-7 / §4-8 の参照実装。
+> **Fully on-premises setup:** a PoC environment for small and mid-sized companies that combines Dify high-precision RAG with n8n business automation without sending any company data to an external cloud. This is the reference implementation of §4-7 / §4-8 of the design doc `02_dify_chatflow_design.md`.
 
-## なぜこの構成？
+## Why this setup?
 
-中小企業の経営者が一番気にするのは **「自社のデータがクラウドに吸い取られないか」** という不安です。本構成では：
+What business owners at small and mid-sized companies worry about most is **"Will our data get sucked into someone's cloud?"** In this setup:
 
-- **規程PDF・経費テンプレート・会話ログ**：すべて社内サーバー内のDocker volumeに格納
-- **DifyからNを叩く通信**：Docker内部ネットワーク（`demo-rag-net`）経由、外に出ない
-- **ファイルダウンロードURL**：`http://localhost:5678/...`（社内）
-- **唯一の外部通信**：LLM API呼び出し（OpenAI / Anthropic）。これすら Ollama 等のローカルLLMに置換可能（拡張ロードマップ Phase 5）
+- **Policy documents, expense templates and conversation logs** are all stored in Docker volumes on the company's own server
+- **Calls from Dify to n8n** travel over the internal Docker network (`demo-rag-net`) and never leave the host
+- **File download URLs** are `http://localhost:5678/...` (internal)
+- **The only external traffic** is the LLM API call (OpenAI / Anthropic). Even that can be replaced with a local LLM such as Ollama (extension roadmap, Phase 5)
 
-→ 「データは外に出ません」と言い切れる。これが受注確度を分けます。
+→ You can say "your data never leaves the building" and mean it. That is often what wins the deal.
 
-## アーキテクチャ
+## Architecture
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│  Docker Host（社内サーバー or 開発Mac）                          │
+│  Docker host (on-prem server or development Mac)                 │
 │                                                                  │
 │  ┌─────────── demo-rag-net (external bridge) ──────────────┐    │
 │  │                                                           │    │
@@ -31,167 +31,168 @@
 │        ↑ Browser:80                  ↑ Browser:5678              │
 └────────┼──────────────────────────────┼──────────────────────────┘
          │                              │
-    [社員のブラウザ]                  [社員のブラウザ]
-                                      （ファイルクリックでDL）
+  [Employee's browser]          [Employee's browser]
+                                (clicks the link to download)
 ```
 
-## ディレクトリ構成
+## Directory layout
 
 ```
 docker/
-├── README.md                       ← このファイル
+├── README.md                       ← this file
 ├── n8n/
-│   ├── docker-compose.yml          ← n8n本体 + templates volume + 共有network参加
-│   └── templates/
-│       └── (expense_template_v3.xlsx をここに置く)
+│   ├── docker-compose.yml          ← n8n + templates volume + joins the shared network
+│   ├── templates/
+│   │   └── (place expense_template_v3.xlsx here)
+│   └── workflows/                  ← exported n8n workflows (ready to import)
 ├── dify/
-│   └── docker-compose.override.yaml ← Dify公式に重ねるネットワーク追加だけの差分
+│   └── docker-compose.override.yaml ← overlay on the official Dify compose (network changes only)
 └── test/
-    └── test_webhook.sh             ← 4段階の疎通テストスクリプト
+    └── test_webhook.sh             ← 4-stage connectivity test script
 ```
 
-## クイックスタート（一括セットアップ）
+## Quick start (full setup)
 
-### 前提
-- Docker Desktop がインストール済み（メモリ最低4GB、推奨8GB）
-- Mac / Linux いずれも動作確認済み（Windows未検証）
-- ポート `80` と `5678` がホスト側で空いていること
+### Prerequisites
+- Docker Desktop installed (4 GB RAM minimum, 8 GB recommended)
+- Tested on macOS and Linux (Windows not tested)
+- Ports `80` and `5678` free on the host
 
-### Step 1：共有ネットワークを作成（一度だけ）
+### Step 1: Create the shared network (once)
 
 ```bash
 docker network create demo-rag-net
 ```
 
-### Step 2：Dify Self-Hosted を準備
+### Step 2: Prepare Dify Self-Hosted
 
 ```bash
-# Dify公式リポジトリをホームディレクトリにクローン
+# Clone the official Dify repository into your home directory
 git clone https://github.com/langgenius/dify.git ~/dify-local
 
-# このリポジトリの override ファイルを Dify の docker/ ディレクトリへコピー
+# Copy this repository's override file into Dify's docker/ directory
 cp docker/dify/docker-compose.override.yaml ~/dify-local/docker/
 
-# Dify の環境設定ファイルを準備
+# Prepare Dify's environment file
 cd ~/dify-local/docker
 cp .env.example .env
 ```
 
-> ⚠️ **Dify のクローンは1箇所だけにすること。** compose のプロジェクト名は
-> カレントディレクトリ名から決まり、Dify は必ず `docker/` 配下で操作するため、
-> **どこにクローンしてもプロジェクト名は `docker`** になります。
-> 2箇所にクローンすると、どちらから `docker compose up -d` しても同じコンテナ群を
-> 操作する一方で、読み込まれる compose ファイル・`.env`・テンプレートは
-> 叩いたディレクトリ側のものになります。片方で直した設定が、もう片方から
-> `up -d` した瞬間に元に戻ります（設計書 §4-8 ⑫）。
+> ⚠️ **Clone Dify in one place only.** The compose project name comes from the
+> current directory name, and Dify is always operated from its `docker/` directory, so
+> **the project name is `docker` wherever you clone it**.
+> With two clones, `docker compose up -d` from either one controls the same set of
+> containers, but the compose files, `.env` and templates are read from whichever
+> directory you ran it in. A setting you fixed in one clone is reverted the moment
+> someone runs `up -d` from the other (design doc §4-8 ⑫).
 >
-> 現在どこから起動されているかの確認：
+> To check where the stack is currently running from:
 > ```bash
 > docker inspect docker-api-1 \
 >   --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}'
 > ```
-> PostgreSQL と Weaviate のデータは bind mount でこのディレクトリ配下に置かれます。
+> PostgreSQL and Weaviate data live under that directory as bind mounts.
 
-> ⚠️ `docker-compose.override.yaml` は Docker Compose が自動で本体の YAML に重ねて読み込みます（手動マージ不要）。
+> ⚠️ Docker Compose automatically layers `docker-compose.override.yaml` on top of the main YAML (no manual merge needed).
 >
-> このoverrideは `api` / `worker` に加えて **`ssrf_proxy` にも** `demo-rag-net` を追加し、
-> さらに `SSRF_PROXY_ALLOW_PRIVATE_DOMAINS: n8n_local` を設定します。
-> Dify は HTTP Request ノードの通信を squid（ssrf_proxy）経由で送出するため、
-> この2つが揃っていないと Chatflow から n8n に到達できません。
-> 見落とすと「疎通テストは通るのに Chatflow だけ動かない」という状態になります（設計書 §4-8 ⑩）。
+> The override adds `demo-rag-net` to `api` and `worker` **and also to `ssrf_proxy`**,
+> and sets `SSRF_PROXY_ALLOW_PRIVATE_DOMAINS: n8n_local`.
+> Dify sends HTTP Request node traffic through squid (`ssrf_proxy`), so without both
+> changes the Chatflow cannot reach n8n.
+> Miss this and you get "the connectivity tests pass, but the Chatflow alone fails" (design doc §4-8 ⑩).
 
-### Step 3：xlsx テンプレートを配置
+### Step 3: Place the xlsx template
 
-このリポジトリのルートにある `経費精算テンプレート_v3.xlsx` を、英語ファイル名で `docker/n8n/templates/` にコピーします：
+Copy `経費精算テンプレート_v3.xlsx` (the expense template) from the repository root into `docker/n8n/templates/` under an English file name:
 
 ```bash
-# このリポジトリのルートに戻って
+# From the repository root
 cp 経費精算テンプレート_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
 
-# macOS で Google Drive 同期フォルダ経由のファイルだった場合は拡張属性を除去（重要）
+# On macOS, strip extended attributes if the file came through a Google Drive sync folder (important)
 xattr -c docker/n8n/templates/expense_template_v3.xlsx
 ```
 
-> 💡 `xattr -c` をスキップすると、Mac上のn8nが「Operation not permitted」(EPERM)で読めません。詳細は設計書 §4-8 ③ を参照。Linux環境ではこの問題は発生しません。
+> 💡 If you skip `xattr -c`, n8n on a Mac cannot read the file and fails with "Operation not permitted" (EPERM). See design doc §4-8 ③. This does not happen on Linux.
 
-### Step 4：両stackを起動
+### Step 4: Start both stacks
 
 ```bash
-# n8n を起動
+# Start n8n
 cd docker/n8n
 docker compose up -d
 
-# Dify を起動（5〜10分かかります、初回はイメージ pull のため）
+# Start Dify (5-10 minutes on first start because of image pulls)
 cd ~/dify-local/docker
 docker compose up -d
 ```
 
-### Step 5：動作確認
+### Step 5: Check status
 
 ```bash
-# 全コンテナが healthy か確認
+# Confirm every container is healthy
 cd ~/dify-local/docker && docker compose ps
-cd <この repo>/docker/n8n && docker compose ps
+cd <this-repo>/docker/n8n && docker compose ps
 ```
 
-各コンテナが `running` または `(healthy)` になっていればOK。
+Every container should show `running` or `(healthy)`.
 
-### Step 6：UIアクセス
+### Step 6: Open the UIs
 
-| サービス | URL | 用途 |
+| Service | URL | Purpose |
 |---|---|---|
-| Dify | <http://localhost/install> | 初回はadminアカウント作成 |
-| n8n | <http://localhost:5678> | ワークフロー編集・モニタリング |
+| Dify | <http://localhost/install> | Create the admin account on first visit |
+| n8n | <http://localhost:5678> | Edit and monitor workflows |
 
-### Step 7：n8n ワークフローのインポート
+### Step 7: Import the n8n workflows
 
-エクスポート済みの JSON を `docker/n8n/workflows/` に同梱しています。
+The exported JSON files are included in `docker/n8n/workflows/`.
 
-| ファイル | 内容 |
+| File | What it does |
 |---|---|
-| `workflow_1_intent_dispatcher.json` | POST受け → Switch → JSON応答（`download_url` を返す） |
-| `workflow_2_file_server.json` | GET受け → ファイル読込 → バイナリ応答（xlsx） |
+| `workflow_1_intent_dispatcher.json` | Receives POST → Switch → JSON response (returns `download_url`) |
+| `workflow_2_file_server.json` | Receives GET → reads the file → binary response (xlsx) |
 
-n8n UI（<http://localhost:5678>）の右上メニュー → **Import from File** で読み込みます。
-CLI からでも可能です：
+Import them from the n8n UI (<http://localhost:5678>) via the top-right menu → **Import from File**.
+The CLI works too:
 
 ```bash
 docker cp docker/n8n/workflows/workflow_1_intent_dispatcher.json n8n_local:/tmp/
 docker exec n8n_local n8n import:workflow --input=/tmp/workflow_1_intent_dispatcher.json
 ```
 
-インポート後に必要な作業は2つです。
+After importing, two things remain:
 
-1. **Header Auth Credential の作成と再リンク**
-   JSON には認証情報の**参照のみ**が含まれ、トークン本体は含まれません（当然です）。
-   Workflow 1 の Webhook ノードを開き、Credential を作り直してください。
-   - Credential 種別：`Header Auth`
-   - **`Name` 欄にはヘッダー名 `X-Auth-Token` を入れます**（Credential の管理名ではありません。
-     ここを間違えると `Authorization data is wrong!` になります。§4-8 ①の隣の罠）
-   - `Value` 欄に共有シークレット（任意のランダム文字列）
-   - 同じ値を Dify 側の環境変数 `N8N_WEBHOOK_TOKEN` にも設定します
-     （`scripts/.dify_admin.env` に書いて `provision_chatflow.py` を流すのが確実）
+1. **Create the Header Auth credential and re-link it**
+   The JSON contains only a **reference** to the credential, not the token itself (as it should).
+   Open the Webhook node in Workflow 1 and create the credential again.
+   - Credential type: `Header Auth`
+   - **Put the header name `X-Auth-Token` in the `Name` field.** It is not the credential's
+     display name. Get this wrong and you see `Authorization data is wrong!`, a trap next to §4-8 ①.
+   - Put the shared secret (any random string) in the `Value` field
+   - Set the same value as the Dify environment variable `N8N_WEBHOOK_TOKEN`
+     (the reliable way is to write it into `scripts/.dify_admin.env` and run `provision_chatflow.py`)
 
-2. **両ワークフローを Active にする**
+2. **Activate both workflows**
 
-> 💡 自分の環境から書き出し直す場合は `python3 scripts/export_n8n_workflows.py` を使ってください。
-> `n8n export:workflow` の生出力には `shared` ブロックに**所有者のメールアドレス**が
-> 含まれるため、そのままコミットできません。このスクリプトが除去します。
+> 💡 To re-export from your own environment, use `python3 scripts/export_n8n_workflows.py`.
+> The raw output of `n8n export:workflow` includes the **owner's e-mail address** in its
+> `shared` block, so it cannot be committed as-is. The script strips it.
 
-### Step 8：疎通テスト
+### Step 8: Connectivity test
 
-n8nワークフローが Active になったら、本リポジトリ提供のスクリプトで4段階の疎通確認：
+Once the n8n workflows are active, run the bundled script for a 4-stage connectivity check:
 
 ```bash
-# 環境変数を設定（n8nのHeader Auth Credentialに登録した値）
+# The value registered in the n8n Header Auth credential
 export N8N_WEBHOOK_TOKEN="<your token>"
 export INTENT_DISPATCHER_PATH="<workflow1 webhook UUID>"
 
-# 実行
+# Run
 ./docker/test/test_webhook.sh
 ```
 
-期待される出力：
+Expected output:
 
 ```
 [INFO] Test 1/4: n8n /healthz from host
@@ -207,54 +208,54 @@ export INTENT_DISPATCHER_PATH="<workflow1 webhook UUID>"
 [PASS] Workflow 2 returned 16464 bytes (HTTP 200)
 ```
 
-4つすべてPASSなら、Dify→n8nのフルチェーンが完全動作している状態です。
+If all four pass, the full Dify → n8n chain is working.
 
-## 「URLの二刀流」設計（重要な設計判断）
+## The "two URLs" design (key design decision)
 
-| 通信パス | 使うURL | 理由 |
+| Path | URL used | Why |
 |---|---|---|
-| Dify → n8n（内部呼び出し） | `http://n8n_local:5678/webhook/<UUID>` | Dockerネットワーク内のサービス名解決 |
-| ブラウザ → ファイルダウンロード | `http://localhost:5678/webhook/files/expense-v3` | ブラウザはDockerネットワークを認識しないので、ホストにpublishされたport経由 |
+| Dify → n8n (internal call) | `http://n8n_local:5678/webhook/<UUID>` | Service-name resolution inside the Docker network |
+| Browser → file download | `http://localhost:5678/webhook/files/expense-v3` | The browser cannot see the Docker network, so it goes through the port published on the host |
 
-n8nがDifyに返す `download_url` フィールドには **必ず `localhost:5678` のURL** を入れること。`n8n_local:5678` を入れるとブラウザで `ERR_NAME_NOT_RESOLVED` になります。
+The `download_url` field that n8n returns to Dify **must use the `localhost:5678` URL**. With `n8n_local:5678` the browser fails with `ERR_NAME_NOT_RESOLVED`.
 
-## トラブルシュート
+## Troubleshooting
 
-| 症状 | 対処 |
+| Symptom | Fix |
 |---|---|
-| `docker compose up` でメモリエラー | Docker Desktop → Settings → Resources → Memory を 8GB 以上に |
-| Difyの `/install` が表示されない | `docker compose ps` で nginx と api が healthy か確認 |
-| 疎通テスト Test 2 で connection refused | `docker network inspect demo-rag-net` で両コンテナが参加しているか確認 |
-| **疎通テストは全部PASSするのに Chatflow だけ `Reached maximum retries for URL http://n8n_local:5678/...`** | **`ssrf_proxy` が `demo-rag-net` に参加していない。** Dify の HTTP Request は squid 経由で送出されるため、名前解決するのは api ではなく squid。override 適用後 `docker compose up -d ssrf_proxy` |
-| **`Access to '...' was blocked by SSRF protection`** | squid の ACL が private 宛先を拒否している。override の `SSRF_PROXY_ALLOW_PRIVATE_DOMAINS: n8n_local` が効いているか確認：`docker exec docker-ssrf_proxy-1 cat /etc/squid/dify_allow_private.conf` |
-| **Bot が毎回「規程に記載が見当たりません」と返す** | ①ナレッジ検索が0件（Rerank APIのレート超過など）②LLMノードのコンテキスト変数が `{{#context#}}` でない。設計書 §4-8 ⑦ ⑧ |
-| **ファイル要求の回答が空文字で返る** | HTTP Request の `body` は文字列なので `body.message` では参照不可。JSONパース用の Code ノードが必要。設計書 §4-8 ⑨ |
-| n8n Read/Write Files で EPERM | xlsxの拡張属性を `xattr -c` で除去（macOSのみ） |
-| n8n Read/Write Files で Allowed paths エラー | ファイル配置先が `/home/node/.n8n-files` 配下か確認 |
-| Webhook で `Unused Respond to Webhook node found` | Webhookノードの Respond を `Using 'Respond to Webhook' Node` に変更、かつ全Switch分岐に Respond ノードを配置 |
+| Out-of-memory error on `docker compose up` | Docker Desktop → Settings → Resources → set Memory to 8 GB or more |
+| Dify `/install` does not load | Check with `docker compose ps` that nginx and api are healthy |
+| Connection refused in connectivity Test 2 | Check with `docker network inspect demo-rag-net` that both containers joined the network |
+| **All connectivity tests pass, but the Chatflow alone fails with `Reached maximum retries for URL http://n8n_local:5678/...`** | **`ssrf_proxy` has not joined `demo-rag-net`.** Dify's HTTP Request goes out through squid, so squid, not api, does the name resolution. After applying the override, run `docker compose up -d ssrf_proxy` |
+| **`Access to '...' was blocked by SSRF protection`** | squid's ACL rejects private destinations. Check that the override's `SSRF_PROXY_ALLOW_PRIVATE_DOMAINS: n8n_local` took effect: `docker exec docker-ssrf_proxy-1 cat /etc/squid/dify_allow_private.conf` |
+| **The bot always answers "no provision found in the policy"** | ① Knowledge retrieval returns zero hits (e.g. a rate-limited Rerank API) ② The LLM node's context variable is not `{{#context#}}`. Design doc §4-8 ⑦ ⑧ |
+| **The answer to a file request comes back empty** | The HTTP Request node's `body` is a string, so `body.message` cannot be referenced. A Code node is needed to parse the JSON. Design doc §4-8 ⑨ |
+| EPERM in n8n Read/Write Files | Strip the xlsx's extended attributes with `xattr -c` (macOS only) |
+| "Allowed paths" error in n8n Read/Write Files | Check that the file is under `/home/node/.n8n-files` |
+| `Unused Respond to Webhook node found` on the webhook | Set the Webhook node's Respond option to `Using 'Respond to Webhook' Node`, and put a Respond node on every Switch branch |
 
-## 本番デプロイ時の追加考慮事項
+## Additional considerations for production
 
-このPoC構成は**開発・社内デモ前提**です。本番納品時は以下の差分を加える必要があります：
+This PoC setup **assumes development and internal demos**. A production delivery needs these changes:
 
-| 項目 | PoC | 本番 |
+| Item | PoC | Production |
 |---|---|---|
-| ホスト | Mac / 開発機 | 社内オンプレサーバー or プライベートVPS |
-| ポート公開 | `localhost:80` `localhost:5678` | リバースプロキシ + 社内DNS（`https://dify.example.co.jp/` 等） |
-| TLS | なし（HTTP） | Let's Encrypt 等で必須 |
-| n8n認証 | Header Auth + 推測困難パス | + IP Allowlist（社内NW限定） |
-| バックアップ | 任意 | postgres + n8n_data + Weaviate vector storeの定期スナップショット |
-| 監視 | docker compose ps | Prometheus + Grafana / Uptime Kuma |
-| ログ集約 | docker compose logs | Loki / Datadog 等 |
+| Host | Mac / development machine | On-prem server or private VPS |
+| Exposed ports | `localhost:80` `localhost:5678` | Reverse proxy + internal DNS (e.g. `https://dify.example.co.jp/`) |
+| TLS | None (HTTP) | Required, e.g. Let's Encrypt |
+| n8n authentication | Header Auth + hard-to-guess path | + IP allowlist (internal network only) |
+| Backups | Optional | Scheduled snapshots of postgres + n8n_data + the Weaviate vector store |
+| Monitoring | `docker compose ps` | Prometheus + Grafana / Uptime Kuma |
+| Log aggregation | `docker compose logs` | Loki / Datadog, etc. |
 
-これらは設計書 §7 納品物チェックリストに含まれます。
+These are part of the delivery checklist in design doc §7.
 
-## 関連ドキュメント
+## Related documents
 
-- [`../02_dify_chatflow_design.md`](../02_dify_chatflow_design.md) — 設計書（§4-7 §4-8 が本構成のソース）
-- [`../01_dummy_manual_demo_logistics.md`](../01_dummy_manual_demo_logistics.md) — Bot に食わせるダミー規程PDF用テキスト
-- [`../scripts/build_expense_template.py`](../scripts/build_expense_template.py) — xlsx 再生成スクリプト
+- [`../02_dify_chatflow_design.md`](../02_dify_chatflow_design.md) — design doc (§4-7 and §4-8 are the source for this setup)
+- [`../01_dummy_manual_demo_logistics.md`](../01_dummy_manual_demo_logistics.md) — the dummy policy text fed to the bot
+- [`../scripts/build_expense_template.py`](../scripts/build_expense_template.py) — xlsx regeneration script
 
-## ライセンス
+## License
 
-ダミー素材としての提供です。実在の企業・人物・住所・電話番号とは無関係です。
+Provided as dummy material. Not affiliated with any real company, person, address or phone number.

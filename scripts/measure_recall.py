@@ -2,7 +2,8 @@
 """Measure Recall@K on the knowledge base using the §3-4 test queries.
 
 Runs the ten in-scope queries from the design doc plus a set of out-of-scope
-queries (the "猫を飼ったら手当出る？" case from demo Scene 3), and reports both
+queries (the "猫を飼ったら手当出る？" / "Do I get an allowance for adopting a
+cat?" case from demo Scene 3), and reports both
 recall and the rerank score distribution. The score gap between the two sets is
 what a Score Threshold has to separate, so this is also how SCORE_THRESHOLD in
 provision_knowledge.py was chosen.
@@ -25,27 +26,28 @@ from provision_knowledge import RETRIEVAL_WEIGHTS
 
 STATE_FILE = REPO_ROOT / "scripts" / ".provision_state.json"
 
-# §3-4 — query, and the clause that must appear in the top K.
+# §3-4 — query, and the clause that must appear in the top K. The queries stay in
+# Japanese because the knowledge base is Japanese; the comments give the meaning.
 TEST_QUERIES: list[tuple[str, str]] = [
-    ("深夜帰りのタクシー代いくら？", "第5条"),
-    ("クライアントとタクシー乗っていいの？", "第5条"),
-    ("タクシー上限超えた", "第5条"),
-    ("経費の締め切りいつ？", "第8条"),
-    ("テンプレ v3 どこ？", "第9条"),
-    ("25日過ぎちゃった", "第8条"),
-    ("保険証なくした", "第15条"),
-    ("夜勤手当いくら？", "第13条"),
-    ("深夜シフトいつまでに申請？", "第14条"),
-    ("新幹線グリーン車乗れる？", "第4条"),
+    ("深夜帰りのタクシー代いくら？", "第5条"),  # late-night taxi home: how much? → Art. 5
+    ("クライアントとタクシー乗っていいの？", "第5条"),  # taxi with a client OK? → Art. 5
+    ("タクシー上限超えた", "第5条"),  # went over the taxi cap → Art. 5
+    ("経費の締め切りいつ？", "第8条"),  # expense deadline? → Art. 8
+    ("テンプレ v3 どこ？", "第9条"),  # where is template v3? → Art. 9
+    ("25日過ぎちゃった", "第8条"),  # missed the 25th → Art. 8
+    ("保険証なくした", "第15条"),  # lost my health insurance card → Art. 15
+    ("夜勤手当いくら？", "第13条"),  # night-shift allowance? → Art. 13
+    ("深夜シフトいつまでに申請？", "第14条"),  # night-shift filing deadline? → Art. 14
+    ("新幹線グリーン車乗れる？", "第4条"),  # Shinkansen first class allowed? → Art. 4
 ]
 
 # Questions the regulation genuinely does not answer. The bot must decline
 # rather than improvise — see the guardrail rules in §1-2.
 OUT_OF_SCOPE_QUERIES = [
-    "猫を飼ったら手当出る？",
-    "有給休暇は何日もらえますか？",
-    "退職金の計算方法を教えて",
-    "今日の東京の天気は？",
+    "猫を飼ったら手当出る？",  # allowance for adopting a cat?
+    "有給休暇は何日もらえますか？",  # how many days of paid leave?
+    "退職金の計算方法を教えて",  # how is severance pay calculated?
+    "今日の東京の天気は？",  # weather in Tokyo today?
 ]
 
 
