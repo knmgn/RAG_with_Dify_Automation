@@ -5,11 +5,11 @@ Drives the bot through Dify's public Service API (the same path a real
 integration would use, not the console debugger) and checks the three
 behaviours the demo depends on:
 
-  1. 規程Q&A       — a policy question is answered from the knowledge base,
+  1. Policy Q&A    — a policy question is answered from the knowledge base,
                      with the amount quoted verbatim and a citation.
-  2. ガードレール    — an out-of-scope question is refused with the fixed
+  2. Guardrail     — an out-of-scope question is refused with the fixed
                      deflection message instead of an invented answer.
-  3. ファイル要求    — a template request routes through the n8n webhook and the
+  3. File request  — a template request routes through the n8n webhook and the
                      returned download URL actually serves the xlsx.
 
     python3 scripts/test_e2e.py
@@ -91,14 +91,15 @@ def main() -> int:
 
     failures = 0
 
-    # ── 1. 規程Q&A ──────────────────────────────────────────────────────
-    print(f"{INFO} Test 1/3: 規程Q&A — 「深夜帰りのタクシー代いくら？」")
+    # ── 1. Policy Q&A ──────────────────────────────────────────────────
+    # "How much is a late-night taxi home?"
+    print(f"{INFO} Test 1/3: policy Q&A — 「深夜帰りのタクシー代いくら？」")
     answer = ask(base_url, api_key, "深夜帰りのタクシー代いくら？").get("answer", "")
     checks = {
-        "quotes the cap verbatim (15,000円)": "15,000円" in answer,
+        "quotes the cap verbatim (15,000円 = JPY 15,000)": "15,000円" in answer,
         "cites the regulation number": "DL-HR-RG-2024-007" in answer,
-        "uses the 3-block format": "【結論】" in answer and "【引用元】" in answer,
-        "did not fall back to the deflection message": "見当たりませんでした" not in answer,
+        "uses the 3-block format (【結論】 conclusion … 【引用元】 source)": "【結論】" in answer and "【引用元】" in answer,
+        "did not fall back to the deflection message (見当たりませんでした)": "見当たりませんでした" not in answer,
     }
     for label, ok in checks.items():
         print(f"       {'✓' if ok else '✗'} {label}")
@@ -109,13 +110,14 @@ def main() -> int:
         print(f"{FAIL} unexpected answer:\n{answer[:600]}")
     print()
 
-    # ── 2. ガードレール ──────────────────────────────────────────────────
-    print(f"{INFO} Test 2/3: ガードレール — 「猫を飼ったら手当出る？」")
+    # ── 2. Guardrail ───────────────────────────────────────────────────
+    # "Do I get an allowance for adopting a cat?" — the policy is silent.
+    print(f"{INFO} Test 2/3: guardrail — 「猫を飼ったら手当出る？」")
     answer = ask(base_url, api_key, "猫を飼ったら手当出る？").get("answer", "")
     checks = {
-        "refuses instead of inventing": "見当たりませんでした" in answer,
-        "names the responsible contact (総務部の佐藤)": "佐藤" in answer,
-        "gives the extension (内線1234)": "1234" in answer,
+        "refuses instead of inventing (見当たりませんでした = not found)": "見当たりませんでした" in answer,
+        "names the responsible contact (Sato, General Affairs)": "佐藤" in answer,
+        "gives the extension (ext. 1234)": "1234" in answer,
     }
     for label, ok in checks.items():
         print(f"       {'✓' if ok else '✗'} {label}")
@@ -126,14 +128,15 @@ def main() -> int:
         print(f"{FAIL} unexpected answer:\n{answer[:600]}")
     print()
 
-    # ── 3. ファイル要求 → n8n → ダウンロード ─────────────────────────────
-    print(f"{INFO} Test 3/3: ファイル要求 — 「経費精算のフォーマットちょうだい」")
+    # ── 3. File request → n8n → download ───────────────────────────────
+    # "Send me the expense report format."
+    print(f"{INFO} Test 3/3: file request — 「経費精算のフォーマットちょうだい」")
     answer = ask(base_url, api_key, "経費精算のフォーマットちょうだい").get("answer", "")
     download_url = "http://localhost:5678/webhook/files/expense-v3"
     checks = {
         "routed to the n8n branch (filename returned)": "経費精算テンプレート_v3.xlsx" in answer,
         "returned the localhost download URL": download_url in answer,
-        "included the deadline from n8n": "25日" in answer,
+        "included the deadline from n8n (the 25th)": "25日" in answer,
     }
     for label, ok in checks.items():
         print(f"       {'✓' if ok else '✗'} {label}")

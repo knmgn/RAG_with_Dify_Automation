@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 3 — build the Dify Knowledge base from code.
 
-Creates the "社内規程ナレッジ" dataset exactly as specified in
+Creates the "社内規程ナレッジ" (internal policy knowledge) dataset exactly as specified in
 `02_dify_chatflow_design.md` §3-3: Parent-Child chunking, high-quality
 indexing on text-embedding-3-large, Hybrid Search with a Cohere reranker,
 the six custom metadata fields, and the built-in metadata toggle.
@@ -43,7 +43,7 @@ EMBEDDING_MODEL = "text-embedding-3-large"
 # rerank-multilingual-v3.0. We use the Weighted Score submode instead, for two
 # reasons, both measured (scripts/measure_recall.py):
 #
-#   * Egress. §4-7 sells this stack on "データは外に出ません". Cohere rerank is a
+#   * Egress. §4-7 sells this stack on "your data never leaves the building". Cohere rerank is a
 #     second external dependency that ships the user's question *and* the
 #     matching regulation text to a third party. Weighted Score is computed
 #     inside Weaviate, so OpenAI (embeddings + LLM) becomes the only egress.
@@ -75,7 +75,7 @@ KEYWORD_WEIGHT = 0.3
 # design intends. The splitter consumes the delimiter, so chunks start cleanly
 # at "第N条（...）".
 PARENT_DELIMITER = "\\n### "
-# The design doc says 1,200, but the longest clause (第5条, タクシー代の支給要件)
+# The design doc says 1,200, but the longest clause (第5条 / Article 5, taxi fare eligibility)
 # is 1,287 characters. At 1,200 the splitter cut it in half, so a query matching
 # 第2項 returned a parent that no longer contained 第1項 — the exact text the user
 # asked about. 1,400 keeps all 21 clauses whole, which is the point of parents.
@@ -216,7 +216,7 @@ def build_knowledge_config(file_id: str) -> dict[str, Any]:
             "rules": {
                 "pre_processing_rules": [
                     # §3-3 ①: collapse whitespace, but never strip URLs/emails —
-                    # the guardrail reply has to be able to cite 佐藤's address.
+                    # the guardrail reply has to be able to cite Sato's e-mail address.
                     {"id": "remove_extra_spaces", "enabled": True},
                     {"id": "remove_urls_emails", "enabled": False},
                 ],

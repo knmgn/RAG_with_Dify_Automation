@@ -1,19 +1,24 @@
-# Dify Chatflow（ワークフロー型）＆プロンプト設計書
-## 株式会社デモ・ロジスティクス向け 社内規程ナレッジ Bot
+# Dify Chatflow (Workflow Mode) & Prompt Design Document
+## Internal Policy Knowledge Bot for Demo Logistics Inc.
 
-> プロジェクトコード：DEMO-RAG-001
-> 設計バージョン：v1.5（実機検証反映版）
-> 想定LLM：OpenAI gpt-4o-mini（コスト最適化）／本番昇格時は gpt-4o または Claude 3.5 Sonnet
-> 想定埋め込みモデル：text-embedding-3-large（dimension: 3072）
-> 検索方式：Hybrid Search ＋ **Weighted Score**（Semantic 0.7 / Keyword 0.3）
-> ※外部 Rerank API（Cohere）は不採用。理由と実測値は §3-3 ④ 参照
-> 想定UI：Dify標準WebApp ／ Slack ／ 社内ポータル iframe 埋め込み
-> 連携先：n8n（Self-hosted on Docker）→ Slack Bot or 内部ファイルサーバー（§4-7参照）
+> Project code: DEMO-RAG-001
+> Design version: v1.5 (updated with results from the live build)
+> LLM: OpenAI gpt-4o-mini (cost-optimized); gpt-4o or Claude 3.5 Sonnet when promoted to production
+> Embedding model: text-embedding-3-large (dimension: 3072)
+> Retrieval: Hybrid Search + **Weighted Score** (Semantic 0.7 / Keyword 0.3)
+> Note: an external Rerank API (Cohere) was not adopted. See §3-3 ④ for the reasons and measurements
+> Front ends: Dify standard WebApp / Slack / iframe embed in an internal portal
+> Integrations: n8n (self-hosted on Docker) → Slack bot or internal file server (see §4-7)
 
-> **v1.5 について**：v1.4 までは机上設計＋Dify Cloud での部分検証に基づいていました。
-> v1.5 では §4-7 の完全ローカル構成を実機で最後まで構築し、動作しなかった記述を本文側で
-> 修正しています。「何が」「なぜ」違ったかの記録は **§4-8 ⑤〜⑪** にまとめてあります。
-> 構築は全て API 経由でスクリプト化済み（`scripts/` 配下、§7 参照）。
+> **About v1.5:** up to v1.4 this document was a paper design, partly verified on Dify Cloud.
+> For v1.5 the fully local setup in §4-7 was built end to end on real hardware, and every
+> statement that turned out not to work has been corrected in place. What was wrong, and why, is
+> recorded in **§4-8 ⑤–⑪**. The entire build is scripted against the API (`scripts/`, see §7).
+
+> **Language note:** the demo targets Japanese-speaking employees, so the knowledge corpus, the
+> prompts and the bot's replies are in Japanese. Copy-paste blocks that the bot uses at runtime
+> are kept in the original Japanese, with English explanations around them. An English translation
+> of the system prompt is in the [README](./README.md#prompt-engineering-system-message).
 
 ---
 
@@ -28,7 +33,7 @@ Japanese small and medium-sized enterprises (SMEs) carry an unusually heavy back
 1. **Hyper-granular internal rules.** Expense policies routinely encode dozens of edge cases — taxi reimbursement only after 23:00, per-route last-train screenshots required as evidence, a JPY 15,000 cap with a separate "excess justification form (F-021)" requiring two-manager approval, distinct lodging caps for the 23 wards of Tokyo vs. other ordinance-designated cities, kilometer-based reimbursement for personal-car business use, and so on. These rules are rarely digitized in a searchable form; they live in 30-page PDFs on a shared drive.
 2. **Strict deadlines enforced by social cost.** Late expense submissions trigger an "incident report" (始末書 / *shimatsu-sho*) and HR performance deductions. The social cost of asking a human (the General Affairs department, *Soumu-bu*) the same question repeatedly is high, which paradoxically *suppresses* healthy clarification and increases compliance errors.
 3. **Single points of failure.** A named individual — in this demo, "Mr. Sato in General Affairs, ext. 1234" — becomes the human bottleneck for health-insurance-card reissuance, shift filings, expense-template distribution, and dozens of unrelated requests. This is the canonical Japanese SME bottleneck.
-4. **Specialized vocabulary and severe orthographic variation.** A Japanese employee asks "深夜帰りのタクシー代いくら？" (colloquial), while the policy is written as "業務終了時刻が23:00を超え" (formal). Bridging this gap requires **Hybrid Search + Rerank**: pure semantic search alone misses form identifiers (`F-021`, `DL-HR-RG-2024-007`), and pure keyword search misses the colloquial-to-formal gap.
+4. **Specialized vocabulary and severe orthographic variation.** A Japanese employee asks "深夜帰りのタクシー代いくら？" (colloquial), while the policy is written as "業務終了時刻が23:00を超え" (formal). Bridging this gap requires **Hybrid Search**: pure semantic search alone misses form identifiers (`F-021`, `DL-HR-RG-2024-007`), and pure keyword search misses the colloquial-to-formal gap.
 5. **Tool fragmentation typical of Japanese workplaces.** Files live on Google Drive or a "社内共有ドライブ" (internal shared drive), conversations happen on Slack/Teams/Chatwork, approvals run through a separate workflow tool ("Coconala-Flow" in this demo), and HR records sit in yet another system. **n8n is the glue** that turns "request → file delivery → audit log" into a single conversational action.
 
 ### What this architecture solves
@@ -37,7 +42,7 @@ By combining **Dify (high-precision RAG with anti-hallucination guardrails)** an
 
 - **Deflection of 60–80% of repetitive questions** away from the General Affairs bottleneck (Mr. Sato), while preserving the citation trail required for Japanese audit and labor-compliance culture.
 - **Zero-hallucination boundary.** When the policy is silent, the bot does not improvise. It returns a strict, fixed deflection message naming the responsible department and contact — matching the cultural expectation of clear accountability (責任の所在 / *sekinin no shozai*).
-- **End-to-end automation, not just Q&A.** The "give me the expense template" intent does not return a link in chat — it triggers n8n to fetch the file from Drive, resolve the user's Slack identity, post a Block Kit card with a download button, and log the request to a Google Sheet for audit. This is the difference between a chatbot and a back-office automation system.
+- **End-to-end automation, not just Q&A.** The "give me the expense template" intent is not answered by the LLM. It triggers an authenticated n8n webhook that resolves the file, serves it from the company's own server, and returns a download link with the submission deadline and policy reference. The full cloud variant (§4-1) extends the same webhook to Drive, a Slack Block Kit card and an audit log in Google Sheets. This is the difference between a chatbot and a back-office automation system.
 
 ### Reusability beyond Japan
 
@@ -56,44 +61,44 @@ Retrieval needs no change: ranking is a Weighted Score computed inside Weaviate 
 there is no language-specific reranking model to swap out — and no third-party reranking
 service in the data path.
 
-The Chatflow graph, the intent classifier, the n8n integration pattern, and the Slack Block Kit payload remain unchanged. **This portability is the core value proposition** we sell to clients evaluating us on Coconala (domestic Japan) and Upwork (global).
+The Chatflow graph, the intent classifier, and the n8n integration pattern remain unchanged. **This portability is the core value proposition** we sell to clients evaluating us on Coconala (domestic Japan) and Upwork (global).
 
 > **On the guardrail.** Earlier revisions of this document placed a score gate between
 > retrieval and the LLM. Measurement showed that in-scope and out-of-scope similarity scores
-> overlap (0.3623–0.6438 vs 0.0–0.3849), so no threshold separates them and the gate was
+> overlap (0.3623–0.6438 vs 0.2144–0.3849), so no threshold separates them and the gate was
 > removed. The zero-hallucination boundary is enforced by the system prompt, and verified by
 > an automated test rather than asserted (§2-4, §3-4).
 
 ---
 
-## 0. 全体アーキテクチャ（俯瞰図）
+## 0. Overall architecture (bird's-eye view)
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
-│  [ユーザー]                                                         │
-│   ⇣ 自然言語で質問                                                  │
+│  [User]                                                             │
+│   ⇣ asks in natural language                                        │
 │  ┌──────────────────────────────────────────┐                       │
-│  │     Dify Chatflow (ワークフロー型)         │                       │
+│  │     Dify Chatflow (workflow mode)         │                       │
 │  │ ┌──────────────────────────────────────┐ │                       │
 │  │ │ ①START (sys.query)                   │ │                       │
 │  │ │   ↓                                  │ │                       │
 │  │ │ ②Question Classifier (Intent Detect) │ │                       │
-│  │ │   ├─ 規程Q&A → ③へ                  │ │                       │
-│  │ │   └─ ファイル要求 → ⑥へ              │ │                       │
+│  │ │   ├─ Policy Q&A → ③                 │ │                       │
+│  │ │   └─ File request → ⑥               │ │                       │
 │  │ │   ↓                                  │ │                       │
 │  │ │ ③Knowledge Retrieval                 │ │                       │
 │  │ │   (Hybrid + Weighted Score 0.7/0.3)  │ │                       │
 │  │ │   ↓                                  │ │                       │
-│  │ │ ⑤LLM 回答生成 + Citation             │ │                       │
-│  │ │   （根拠が無ければ定型文で突っぱね）  │ │                       │
+│  │ │ ⑤LLM answer + Citation               │ │                       │
+│  │ │   (fixed refusal if no grounding)    │ │                       │
 │  │ │   ↓                                  │ │                       │
 │  │ │ ⑧Answer (Streaming)                  │ │                       │
 │  │ │                                      │ │                       │
 │  │ │ ⑥HTTP Request → n8n Webhook         │ │ ─── Webhook ──┐       │
 │  │ │   ↓                                  │ │              ⇣       │
-│  │ │ ⑥'Code (JSONパース)                  │ │     ┌─────────────┐  │
+│  │ │ ⑥'Code (JSON parse)                  │ │     ┌─────────────┐  │
 │  │ │   ↓                                  │ │     │   n8n        │  │
-│  │ │ ⑧'Answer (ファイル回答)              │ │     │ ┌──────────┐ │  │
+│  │ │ ⑧'Answer (file reply)                │ │     │ ┌──────────┐ │  │
 │  │ └──────────────────────────────────────┘ │     │ │Webhook In│ │  │
 │  └──────────────────────────────────────────┘     │ │  ↓       │ │  │
 │                                                    │ │Switch    │ │  │
@@ -108,12 +113,19 @@ The Chatflow graph, the intent classifier, the n8n integration pattern, and the 
 
 ---
 
-## 1. システムプロンプト（LLM挙動制御）
+## 1. System prompt (controlling LLM behavior)
 
-### 1-1. 配置ノード
-Chatflow 内の「LLM」ノード（ノードID: `llm_answerer`）の **System Message** に以下を貼り付ける。
+### 1-1. Where it goes
+Paste the following into the **System Message** of the "LLM" node in the Chatflow (node ID: `llm_answerer`).
 
-### 1-2. プロンプト本文（コピペ用）
+### 1-2. Prompt text (copy-paste)
+
+The prompt is in Japanese because the bot answers in Japanese. In summary: answer only from
+`<context>`; if the context does not contain the answer, reply with the fixed fallback message
+naming Mr. Sato in General Affairs; no general legal or tax commentary; quote amounts and
+deadlines verbatim; refer exception requests to General Affairs; use the three-block format
+(Conclusion / Details / Source); no hedging, no invented article numbers. The full English
+translation is in the [README](./README.md#prompt-engineering-system-message).
 
 ```text
 # 役割
@@ -164,51 +176,55 @@ Chatflow 内の「LLM」ノード（ノードID: `llm_answerer`）の **System M
 </context>
 ```
 
-> ⚠️ **`{{#context#}}` であること。** Dify がコンテキストを差し込むプレースホルダは
-> `{{#context#}}` のみです（`graphon/nodes/llm/llm_utils.py: CONTEXT_PLACEHOLDER`）。
-> v1.4 までの `{{#context.result#}}` は置換されず、LLM にはその文字列がそのまま渡ります。
-> エラーにならず「ナレッジを一切参照しない Bot」が静かに出来上がるため、最も危険な誤記でした。
-> 詳細は §4-8 ⑧。
+> ⚠️ **It must be `{{#context#}}`.** The only placeholder Dify substitutes with the retrieved
+> context is `{{#context#}}` (`graphon/nodes/llm/llm_utils.py: CONTEXT_PLACEHOLDER`).
+> The `{{#context.result#}}` used up to v1.4 is never replaced, so the LLM receives that literal string.
+> Nothing errors; you silently end up with "a bot that never looks at the knowledge base". This was
+> the most dangerous typo in the document. Details in §4-8 ⑧.
 
-### 1-3. 設計意図メモ
-- `<context>` タグでナレッジを囲うのは、LLMに「これが事実情報源だ」と明示するため。OpenAI系・Anthropic系ともにXMLタグ構造で渡すと指示遵守率が向上する。
-- 「該当しない場合の定型文」を**完全一致レベルで書かせる**ことで、ハルシネーションを抑制し、責任の所在（佐藤）を明確化する。
-- 回答フォーマットの3ブロック構造は、エグゼクティブ層が「結論ファースト」で読めるように設計（PREP法の応用）。
+### 1-3. Design rationale
+- Wrapping the knowledge in a `<context>` tag tells the LLM explicitly "this is the source of truth". Both OpenAI and Anthropic models follow instructions more reliably when inputs are given in XML-tag structure.
+- Making the model reproduce the "not covered" message **word for word** suppresses hallucination and makes accountability (Sato) explicit.
+- The three-block answer format is designed so executives can read "conclusion first" (an application of the PREP method).
 
 ---
 
-## 2. Chatflow ノード設計（詳細）
+## 2. Chatflow node design (detail)
 
-### 2-1. ノード一覧
+### 2-1. Node list
 
-| # | ノード名 | タイプ | ノードID | 役割 |
+| # | Node name | Type | Node ID | Role |
 |---|---|---|---|---|
-| ① | START | 開始ノード | `start` | ユーザー入力受付（`sys.query`） |
-| ② | インテント分類 | Question Classifier | `intent_classifier` | 「Q&A」か「ファイル要求」かを判定 |
-| ③ | ナレッジ検索 | Knowledge Retrieval | `kb_retrieval` | Hybrid Search + Weighted Score |
-| ⑤ | 回答生成 | LLM | `llm_answerer` | システムプロンプトで回答生成 |
-| ⑥ | Webhook送信 | HTTP Request | `n8n_webhook` | n8nへPOSTリクエスト |
-| ⑥' | レスポンス解析 | Code (python3) | `parse_response` | n8n の JSON 文字列を変数に展開 |
-| ⑧ | 最終出力 | Answer | `final_answer` | LLM出力 |
-| ⑧' | ファイル回答 | Answer | `file_answer` | n8n レスポンスを整形して出力 |
+| ① | START | Start node | `start` | Receives user input (`sys.query`) |
+| ② | Intent classifier (インテント分類) | Question Classifier | `intent_classifier` | Decides "Q&A" vs. "file request" |
+| ③ | Knowledge retrieval (ナレッジ検索) | Knowledge Retrieval | `kb_retrieval` | Hybrid Search + Weighted Score |
+| ⑤ | Answer generation (回答生成) | LLM | `llm_answerer` | Generates the answer under the system prompt |
+| ⑥ | Webhook call | HTTP Request | `n8n_webhook` | POST request to n8n |
+| ⑥' | Response parsing (レスポンス解析) | Code (python3) | `parse_response` | Expands n8n's JSON string into variables |
+| ⑧ | Final output | Answer | `final_answer` | LLM output |
+| ⑧' | File reply (ファイル回答) | Answer | `file_answer` | Formats and outputs the n8n response |
 
-**不採用にしたノード（v1.4 からの変更）**
+**Nodes dropped (changes from v1.4)**
 
-| # | ノード名 | 不採用の理由 |
+| # | Node name | Why it was dropped |
 |---|---|---|
-| ④ | スコア判定（IF/ELSE） | スコア閾値では在圏／圏外を分離できないことが実測で判明したため（§2-4・§3-3 ⑤） |
-| ⑦ | 突っぱね回答（Answer 固定文） | ④ が無くなり到達経路が消滅。突っぱねは §1-2 のシステムプロンプトが担当 |
+| ④ | Score check (IF/ELSE) | Measurement showed a score threshold cannot separate in-scope from out-of-scope (§2-4, §3-3 ⑤) |
+| ⑦ | Refusal answer (fixed-text Answer) | With ④ gone, nothing routes to it. Refusal is handled by the §1-2 system prompt |
 
-実際のグラフ構成：
+Actual graph:
 
 ```
-[① START] → [② インテント分類] ─ クラス1 ─→ [③ ナレッジ検索] → [⑤ LLM] → [⑧ Answer]
-                                └ クラス2 ─→ [⑥ HTTP Request] → [⑥' Code] → [⑧' Answer]
+[① START] → [② Intent classifier] ─ Class 1 ─→ [③ Knowledge retrieval] → [⑤ LLM] → [⑧ Answer]
+                                  └ Class 2 ─→ [⑥ HTTP Request] → [⑥' Code] → [⑧' Answer]
 ```
 
-### 2-2. ノード② Question Classifier 設定
+### 2-2. Node ② Question Classifier settings
 
-**Classifier プロンプト：**
+**Classifier prompt** (Japanese, used as-is). It defines Class 1 "policy Q&A" (questions about policy
+content, e.g. "What is the taxi cap?", "When is the expense deadline?") and Class 2 "file request"
+(requests to send or download the expense template, e.g. "Send me the expense format", "I want the
+template link"), and says to choose Class 1 when in doubt.
+
 ```text
 ユーザーの発話を以下の2クラスのいずれかに分類してください。
 
@@ -223,45 +239,47 @@ Chatflow 内の「LLM」ノード（ノードID: `llm_answerer`）の **System M
 判定が曖昧な場合は【クラス1：規程Q&A】を選択してください。
 ```
 
-**出力先：**
-- クラス1 → ③へ
-- クラス2 → ⑥（n8n Webhook）へ
+**Routing:**
+- Class 1 → ③
+- Class 2 → ⑥ (n8n Webhook)
 
-### 2-3. ノード③ Knowledge Retrieval 設定
+### 2-3. Node ③ Knowledge Retrieval settings
 
-ナレッジ作成時の Retrieval Setting（§3-3 ③〜⑤）を継承するため、本ノード側では**ナレッジを選択するだけで自動適用**される。本デモでの実効値は以下の通り。
+This node inherits the Retrieval Setting configured when the knowledge base was created (§3-3 ③–⑤), so **selecting the knowledge base is all that is needed**. The effective values in this demo:
 
-| 項目 | 設定値 | 備考 |
+| Item | Value | Notes |
 |---|---|---|
-| 検索モード | **Hybrid Search**（Vector + Full-Text） | UIで `Hybrid Search` カードを選択 |
-| Hybrid サブモード | **Weighted Score** | 外部Rerank APIを使わない。理由は §3-3 ④ |
-| 重み | Semantic `0.7` / Keyword `0.3` | |
-| Top K | `4` | プロンプトに渡す最終件数 |
-| Score Threshold | `0.3`（ON） | **ノイズ除去用**。ガードレールではない（§3-3 ⑤） |
-| メタデータフィルタ | `disabled`（本デモ） | 単一ドキュメント運用のため。複数ナレッジ時は `doc_type = "regulation"` |
+| Search mode | **Hybrid Search** (Vector + Full-Text) | Select the `Hybrid Search` card in the UI |
+| Hybrid submode | **Weighted Score** | No external Rerank API. See §3-3 ④ |
+| Weights | Semantic `0.7` / Keyword `0.3` | |
+| Top K | `4` | Final number of chunks passed to the prompt |
+| Score Threshold | `0.3` (ON) | **A noise filter**, not a guardrail (§3-3 ⑤) |
+| Metadata filter | `disabled` (this demo) | Single-document setup. With multiple knowledge sources, use `doc_type = "regulation"` |
 
-### 2-4. ノード④ IF/ELSE（**不採用**）
+### 2-4. Node ④ IF/ELSE (**dropped**)
 
-v1.4 では「Rerankスコア > 0.5」で分岐し、閾値未満なら突っぱね定型文を返す設計でした。
-**実測の結果この設計は成立しないことが判明したため、v1.5 で不採用としています。**
+v1.4 branched on "Rerank score > 0.5" and returned the fixed refusal below the threshold.
+**Measurement showed this design does not work, so it was dropped in v1.5.**
 
-計測値（`scripts/measure_recall.py`、Weighted Score・Top K=4）：
+Measurements (`scripts/measure_recall.py`, Weighted Score, Top K=4):
 
-| 対象 | トップスコアの範囲 |
+| Query set | Range of top score |
 |---|---|
-| 在圏クエリ（§3-4 の10問） | **0.3623 〜 0.6438** |
-| 圏外クエリ（「猫を飼ったら手当出る？」等4問） | **0.2144 〜 0.3849** |
+| In-scope queries (the 10 in §3-4) | **0.3623 – 0.6438** |
+| Out-of-scope queries (4, e.g. "Do I get an allowance for adopting a cat?") | **0.2144 – 0.3849** |
 
-両者の範囲が重なっており、**どこに閾値を引いても在圏／圏外を分離できません**。
-閾値を上げれば正しい質問が落ち、下げれば圏外が通ります。
-したがって「スコアゲートでハルシネーションを防ぐ」というアプローチ自体が成立しません。
+The ranges overlap, so **no threshold can separate in-scope from out-of-scope**.
+Raise it and correct questions are dropped; lower it and out-of-scope ones get through.
+The approach of "preventing hallucination with a score gate" therefore does not hold.
 
-**代わりにガードレールは §1-2 のシステムプロンプト（絶対遵守ルール2）が担います。**
-`<context>` に根拠が無ければ定型文で突っぱねる、という指示です。実機テスト
-（`scripts/test_e2e.py` Test 2）で「猫を飼ったら手当出る？」に対し、
-定型文・担当者名・内線番号が正しく返ることを確認済みです。
+**Instead, the guardrail is the §1-2 system prompt (non-negotiable rule 2):**
+refuse with the fixed message when `<context>` contains no grounding. The live test
+(`scripts/test_e2e.py` Test 2) confirms that "猫を飼ったら手当出る？" (allowance for adopting a cat?)
+returns the fixed message, the contact name and the extension.
 
-> 参考：突っぱね定型文（システムプロンプト内に記述）
+> Reference: the fixed refusal message (written in the system prompt). In English: "No explicit
+> provision covering your question was found in the internal rules (DL-HR-RG-2024-007). Please
+> contact Mr. Sato in General Affairs directly (ext. 1234 / sato.kenichi@…)."
 > ```text
 > ご質問の件について、社内規程（DL-HR-RG-2024-007）内に明示的な記載が見当たりませんでした。
 > 詳細については総務部の佐藤（内線1234／sato.kenichi@demo-logistics.example.co.jp）まで直接お問い合わせください。
@@ -269,142 +287,144 @@ v1.4 では「Rerankスコア > 0.5」で分岐し、閾値未満なら突っぱ
 
 ---
 
-## 3. ハイブリッド検索（Vector + Keyword）×Rerank の重要性と設計
+## 3. Why hybrid search (Vector + Keyword) matters, and how it is designed
 
-### 3-1. 「なぜハイブリッドが必要なのか」を一言で
-- **Vector検索だけ**：「深夜帰り」「夜遅く」「終電後」など**意味的に近い表現**は拾えるが、「F-021」「DL-HR-RG-2024-007」など**固有の番号・コード**は弱い。
-- **Keyword検索（BM25）だけ**：固有番号・条文番号には強いが、口語表現の揺れに弱い。
-- **両者を融合**することで、表記揺れ × 固有名詞 の両方に強くなる。さらに**Rerank**で文脈的関連度を再評価し、ノイズを除去する。
+### 3-1. Why hybrid, in one line each
+- **Vector search alone** catches **semantically similar phrasing** such as "late-night ride home", "late at night", "after the last train", but is weak on **specific numbers and codes** like "F-021" and "DL-HR-RG-2024-007".
+- **Keyword search (BM25) alone** is strong on specific numbers and article numbers, but weak on colloquial variation.
+- **Combining both** makes retrieval robust to both phrasing variation and proper nouns. (A Rerank model can further re-score contextual relevance; this demo uses Weighted Score instead, see §3-3 ④.)
 
-### 3-2. 想定される表記揺れ例（実務でよくあるパターン）
+### 3-2. Expected phrasing variation (common real-world patterns)
 
-| ユーザー口語表現 | 規程内の正式表記 | 対策 |
+| Colloquial user phrasing | Formal wording in the policy | Countermeasure |
 |---|---|---|
-| 「深夜帰りのタクシー代いくら？」 | 「業務終了時刻が23:00を超え」「タクシー代の支給要件」 | Vectorで意味類似拾い |
-| 「経費の締め切りいつ？」 | 「経費精算書の提出期限」「毎月25日17:00必着」 | Vectorで意図類似拾い |
-| 「テンプレ v3」 | 「経費精算テンプレート_v3.xlsx」 | BM25でファイル名拾い |
-| 「保険証なくした」 | 「健康保険被保険者証」「再交付申請書（F-031）」 | Hybrid（両方必要） |
-| 「F-021って何？」 | 「タクシー代超過利用理由書」 | BM25が必須 |
-| 「夜勤の申込いつまで？」 | 「深夜シフトの申請期日」「前々週金曜日17:00」 | Vector + Rerankで条文絞込 |
+| "深夜帰りのタクシー代いくら？" (late-night taxi home, how much?) | "業務終了時刻が23:00を超え" (work ends after 23:00), "タクシー代の支給要件" (taxi fare eligibility) | Vector catches the semantic similarity |
+| "経費の締め切りいつ？" (expense deadline?) | "経費精算書の提出期限" (submission deadline), "毎月25日17:00必着" (must arrive by 17:00 on the 25th) | Vector catches the intent |
+| "テンプレ v3" (template v3) | "経費精算テンプレート_v3.xlsx" | BM25 catches the file name |
+| "保険証なくした" (lost my insurance card) | "健康保険被保険者証" (health insurance card), "再交付申請書（F-031）" (reissue form) | Hybrid (both needed) |
+| "F-021って何？" (what is F-021?) | "タクシー代超過利用理由書" (taxi excess justification form) | BM25 required |
+| "夜勤の申込いつまで？" (night-shift filing deadline?) | "深夜シフトの申請期日" (night-shift application deadline), "前々週金曜日17:00" (17:00 Friday two weeks before) | Vector + ranking narrows to the clause |
 
-### 3-3. Dify側 ナレッジ設定（推奨パラメータ）
+### 3-3. Dify knowledge settings (recommended parameters)
 
-#### ① チャンク分割
+#### ① Chunking
 
-> **重要な単位の注意**：Dify UI のチャンク長入力は **`characters`（文字数）単位** です。本設計書では当初 `tokens` 表記でしたが、UIに合わせて以下では **`characters` を主、`tokens` 換算を括弧書き** で併記します。日本語＋`text-embedding-3-large`（cl100k_base トークナイザ）では概ね **1日本語文字 ≈ 1〜1.5 tokens** です。
+> **Important unit note:** chunk lengths in the Dify UI are in **`characters`**. This document originally used `tokens`; to match the UI, the values below give **`characters` first, with the `tokens` equivalent in parentheses**. For Japanese with `text-embedding-3-large` (cl100k_base tokenizer), roughly **1 Japanese character ≈ 1–1.5 tokens**.
 
-> ⚠️ **投入ファイルは `.md` ではなく `.txt` にすること。** Dify の Markdown 抽出器は
-> チャンク設定を適用する**前に**、`^#+\s` にマッチする全見出しでドキュメントを分割します。
-> `.md` のまま投入すると `#### 第N項` の一つ一つが独立した Parent になり、
-> ここで設定する Delimiter も Maximum chunk length も**事実上無視されます**。詳細は §4-8 ⑥。
-> 本デモでは `scripts/provision_knowledge.py` が `#### ` 見出しだけを平文化した `.txt` を
-> 生成して投入しています（`### 第N条` は Delimiter として使うため残す）。
+> ⚠️ **Upload a `.txt` file, not `.md`.** Dify's Markdown extractor splits the document at every
+> heading matching `^#+\s` **before** the chunk settings are applied. Upload the `.md` as-is and
+> every `#### 第N項` (clause item) becomes its own Parent, so the Delimiter and Maximum chunk
+> length set here are **effectively ignored**. Details in §4-8 ⑥.
+> In this demo, `scripts/provision_knowledge.py` generates a `.txt` with only the `#### ` headings
+> flattened and uploads that (the `### 第N条` article headings are kept because they serve as the Delimiter).
 
-- **チャンクモード：階層分割（Parent-Child）** を選択（UI上の表示：`Parent-child`）
-  - **Parent-chunk for Context：`Paragraph`** モードを選択（`Full Doc` ではない）
-    - Delimiter：**`\n### `**（条文見出し `### 第N条（...）` で分割）
-      - ⚠️ **区切り文字に日本語を含めてはいけません。** Dify は区切り文字を
-        `codecs.decode(sep, "unicode_escape")` に通すため、`\n第` は `\nç¬¬` に文字化けして
-        絶対にマッチしません。v1.4 の `\n### \n#### \n第` は機能しません（§4-8 ⑤）。
-      - 区切り文字はチャンク本文から除去されるため、各 Parent は `第N条（...）` から始まります。
-    - Maximum chunk length：**`1,400` characters**
-      - v1.4 では 1,200 としていましたが、最長の第5条（タクシー代の支給要件）が **1,287 文字**
-        あり、1,200 では条文が途中で分断されます。実害として「深夜帰りのタクシー代いくら？」で
-        第2項がヒットしても第1項（＝答えそのもの）を含まない Parent が返り、Top 4 から落ちました。
-        1,400 なら全21条が丸ごと1 Parent に収まります（実測：Parent 数 21、第5条 1,254 文字）。
-  - **Child-chunk for Retrieval**（embedding対象。意味の粒度を司る）
-    - Delimiter：`\n`（改行）
-    - Maximum chunk length：**`250` characters**（≈ 300〜375 tokens 相当）
-      - 512 など大きめにすると複数項目が1チャンクに混ざり、表記揺れに対するヒット精度が下がる傾向。Recall@4テスト（§3-4）で90%未達なら 200 まで下げて再評価。
-- **オーバーラップ設定について**：Dify の Parent-Child モードでは **オーバーラップ設定のUIは存在しません**（General／single chunk モードのみで露出）。子チャンク間の重なりは Dify が内部管理するため、本モード使用時は**指定不要**です。
+- **Chunk mode: hierarchical (Parent-Child)** (shown in the UI as `Parent-child`)
+  - **Parent-chunk for Context: `Paragraph`** mode (not `Full Doc`)
+    - Delimiter: **`\n### `** (splits on article headings `### 第N条（...）`)
+      - ⚠️ **The delimiter must not contain Japanese.** Dify runs the delimiter through
+        `codecs.decode(sep, "unicode_escape")`, so `\n第` is mangled into `\nç¬¬` and can never
+        match. v1.4's `\n### \n#### \n第` does not work (§4-8 ⑤).
+      - The delimiter is stripped from the chunk text, so each Parent starts with `第N条（...）`.
+    - Maximum chunk length: **`1,400` characters**
+      - v1.4 used 1,200, but the longest clause, Article 5 (taxi fare eligibility), is **1,287
+        characters**, so 1,200 splits it in the middle. The real damage: for "深夜帰りのタクシー代いくら？"
+        clause 2 matched, but the returned Parent no longer contained clause 1 (the actual answer) and
+        fell out of the Top 4. At 1,400, all 21 articles fit whole in one Parent each (measured: 21
+        Parents, Article 5 = 1,254 characters).
+  - **Child-chunk for Retrieval** (what gets embedded; controls semantic granularity)
+    - Delimiter: `\n` (newline)
+    - Maximum chunk length: **`250` characters** (≈ 300–375 tokens)
+      - Larger values such as 512 tend to mix several items into one chunk and reduce hit accuracy against phrasing variation. If the Recall@4 test (§3-4) falls below 90%, lower it to 200 and re-evaluate.
+- **About overlap:** in Dify's Parent-Child mode **there is no overlap setting in the UI** (it appears only in General / single-chunk mode). Dify manages child-chunk overlap internally, so **nothing needs to be set** in this mode.
 - **Text Pre-processing Rules**
-  - ✅ **Replace consecutive spaces, newlines and tabs**：ON（推奨）
-  - ❌ **Delete all URLs and email addresses**：**必ずOFFのまま**にすること。本デモではガードレール定型文に総務部 佐藤のメールアドレス（`sato.kenichi@demo-logistics.example.co.jp`）等を含めて Citation する設計のため、ここをONにすると規程内の連絡先が削除され、「総務部の佐藤までお問い合わせください」のCitation付き突っぱね回答が成立しなくなります。
+  - ✅ **Replace consecutive spaces, newlines and tabs**: ON (recommended)
+  - ❌ **Delete all URLs and email addresses**: **must stay OFF**. In this demo the fixed refusal cites the e-mail address of Sato in General Affairs (`sato.kenichi@demo-logistics.example.co.jp`). Turning this on deletes the contact details from the policy, and the cited "please contact Sato in General Affairs" refusal no longer works.
 
-#### ② インデキシング
-- **Embedding Model**：`text-embedding-3-large`（日本語性能：◎、3072次元）
-  - コスト重視なら `text-embedding-3-small`（1536次元）も可。精度差は規程文書ではほぼ無視できる（コストは約 1/6.5）。
-  - ⚠️ High Qualityモードでembedding完了後はEmbedding Modelの変更不可。再構築が必要になるため**初回設定時に確定**させること。
-- **Index Method**：High Quality（経済モードは禁止／そもそもParent-Childモードでは選択不可）
+#### ② Indexing
+- **Embedding model:** `text-embedding-3-large` (excellent Japanese performance, 3072 dimensions)
+  - If cost matters, `text-embedding-3-small` (1536 dimensions) is also fine. For policy documents the accuracy difference is negligible (about 1/6.5 of the cost).
+  - ⚠️ In High Quality mode the embedding model cannot be changed once embedding finishes. Changing it requires a rebuild, so **decide it at initial setup**.
+- **Index method:** High Quality (Economy mode is prohibited, and is not selectable in Parent-Child mode anyway)
 
-#### ③ Retrieval Setting（検索方法）
+#### ③ Retrieval Setting
 
-UIの `Retrieval Setting` カードから3択がある。**`Hybrid Search` を選択すること**。
+The `Retrieval Setting` card in the UI offers three options. **Choose `Hybrid Search`.**
 
-| 選択肢 | 採否 | 理由 |
+| Option | Adopted | Reason |
 |---|---|---|
-| Vector Search | ❌ | 固有番号（`F-021`、`DL-HR-RG-2024-007`）やファイル名（`経費精算テンプレート_v3.xlsx`）の取りこぼし発生 |
-| Full-Text Search | ❌ | 口語表現（「深夜帰り」→「23:00を超え」）の表記揺れに弱い |
-| **Hybrid Search** | ✅ | Vector + Full-Text の並列実行で双方の弱点を相互補完 |
+| Vector Search | ❌ | Misses specific numbers (`F-021`, `DL-HR-RG-2024-007`) and file names (`経費精算テンプレート_v3.xlsx`) |
+| Full-Text Search | ❌ | Weak on colloquial variation ("深夜帰り" late-night ride → "23:00を超え" after 23:00) |
+| **Hybrid Search** | ✅ | Runs Vector + Full-Text in parallel so each covers the other's weakness |
 
-#### ④ Hybrid Search のサブモード（Weighted Score vs Rerank Model）
+#### ④ Hybrid Search submode (Weighted Score vs. Rerank Model)
 
-`Hybrid Search` を選ぶと、その内部にさらに2つのサブモードが現れる。**`Weighted Score` を選択すること**（v1.4 からの変更）。
+Choosing `Hybrid Search` reveals two further submodes. **Choose `Weighted Score`** (changed from v1.4).
 
-| サブモード | 並び替えロジック | 採否 |
+| Submode | Ranking logic | Adopted |
 |---|---|---|
-| **Weighted Score** | Semantic / Keyword の**固定重み**を線形結合（Semantic `0.7` / Keyword `0.3`） | ✅ **本デモの採用** |
-| Rerank Model | Rerankモデルが**文脈を理解してクエリごとに動的に並び替え** | ❌ 外部送信が増える割に本件では精度差ゼロ |
+| **Weighted Score** | Linear combination with **fixed weights** for Semantic / Keyword (Semantic `0.7` / Keyword `0.3`) | ✅ **Used in this demo** |
+| Rerank Model | A rerank model **re-orders results dynamically per query** using context | ❌ More data egress, zero accuracy gain in this case |
 
-**Weighted Score を選ぶ理由（2点、いずれも実測済み）**
+**Why Weighted Score (two reasons, both measured)**
 
-1. **外部送信が増えないこと。** §4-7 の売り文句は「データは外に出ません」である。
-   Cohere rerank は LLM とは別の第三者に、**ユーザーの質問文と、ヒットした規程本文そのもの**を
-   送信する。中小企業の経営者に「社内完結です」と説明する構成としては明確な穴になる。
-   Weighted Score は Weaviate 内で計算されるため、外部送信は OpenAI（Embedding と LLM）のみになる。
-2. **精度が落ちないこと。** §3-4 の10問で **両者とも Recall@4 = 100%** だった。
-   本件のように文書が小さく（21条・約6,400文字）条文単位で Parent が切れている場合、
-   Rerank による並び替えの余地がほとんど無い。
+1. **No additional data egress.** The selling point of §4-7 is "your data never leaves the building".
+   Cohere rerank sends **the user's question and the matching policy text itself** to a third party
+   other than the LLM provider. For a setup pitched to SME owners as "fully in-house", that is a clear hole.
+   Weighted Score is computed inside Weaviate, so the only egress is OpenAI (embeddings and LLM).
+2. **No loss of accuracy.** On the 10 queries in §3-4, **both scored Recall@4 = 100%**.
+   When the document is small (21 articles, about 6,400 characters) and Parents are cut per
+   article, as here, there is almost nothing left for a reranker to reorder.
 
-> 💡 加えて Cohere のトライアルキーには **約10リクエスト/分** のレート制限があり、
-> 超過すると Dify はエラーを出さず**検索結果0件**を返す。Bot が「規程に記載がありません」と
-> 誤って突っぱねるだけなので原因特定が難しい。デモ撮影中に踏むと致命的（§4-8 ⑦）。
+> 💡 In addition, Cohere's trial key is rate-limited to **about 10 requests per minute**, and when
+> it is exceeded Dify returns **zero search results without an error**. The bot simply refuses with
+> "not found in the policy", which makes the cause hard to find. Hitting this while recording a demo
+> is fatal (§4-8 ⑦).
 >
-> 文書量が増えて Rerank が必要になった場合は、完全閉域を維持するため
-> `jina-reranker-v2-base-multilingual` 等を Xinference / TEI でローカルに立て、
-> Dify のモデルプロバイダとして登録する方式を推奨する（Cohere API 直叩きではなく）。
+> If the document volume grows and reranking becomes necessary, the recommended approach for keeping
+> the setup fully closed is to run `jina-reranker-v2-base-multilingual` or similar locally with
+> Xinference / TEI and register it as a Dify model provider (rather than calling the Cohere API directly).
 
-#### ⑤ 検索パラメータ
+#### ⑤ Retrieval parameters
 
-| 項目 | 設定値 |
+| Item | Value |
 |---|---|
 | **Semantic Weight** | `0.7` |
 | **Keyword Weight** | `0.3` |
-| **Top K** | `4`（LLMに渡す最終件数） |
-| **Score Threshold** | `0.3`（ON） |
+| **Top K** | `4` (final number passed to the LLM) |
+| **Score Threshold** | `0.3` (ON) |
 
-> ⚠️ **Score Threshold `0.5` は誤り**（v1.4 の記載）。Weighted Score での実測スコアは
-> 在圏クエリで 0.3623〜0.6438 のため、0.5 では正しい質問の大半が落ちる。
+> ⚠️ **A Score Threshold of `0.5` is wrong** (as written in v1.4). Measured Weighted Score values
+> for in-scope queries are 0.3623–0.6438, so 0.5 drops most correct questions.
 >
-> さらに重要な点として、**閾値はガードレールとして機能しない**。圏外クエリのスコアが
-> 最大 0.3849 に達し、在圏クエリの最低値 0.3623 を上回るためである（§2-4 の表）。
-> `0.3` は「明らかな無関係を切る」ノイズフィルタとして設定しており、
-> ハルシネーション抑止は §1-2 のシステムプロンプトが担う。
+> More importantly, **the threshold does not work as a guardrail**. Out-of-scope queries score up to
+> 0.3849, above the lowest in-scope score of 0.3623 (table in §2-4).
+> `0.3` is set as a noise filter that cuts the clearly irrelevant, and hallucination prevention is
+> the job of the §1-2 system prompt.
 >
-> 再計測：`python3 scripts/measure_recall.py --threshold 0.3`
+> To re-measure: `python3 scripts/measure_recall.py --threshold 0.3`
 
-#### ⑥ メタデータ
+#### ⑥ Metadata
 
-> ⚠️ Difyのメタデータは **2段階構成** であることに注意。「フィールド定義（schema）」と「各ドキュメントへの値の割り当て」は別画面・別操作。
+> ⚠️ Dify metadata is **a two-step setup**. "Defining the fields (schema)" and "assigning values to each document" are separate screens and separate operations.
 
-##### Step 1：カスタムメタデータ・フィールドの定義（schema）
+##### Step 1: Define custom metadata fields (schema)
 
-ナレッジ画面 → 右上 `Metadata` ボタン → `+ Add Metadata` から、以下の6フィールドを **string 型** で定義する。
+Knowledge screen → top-right `Metadata` button → `+ Add Metadata`, and define the following six fields as **string**.
 
-| Field name | Type | 用途 |
+| Field name | Type | Purpose |
 |---|---|---|
-| `doc_id` | string | 規程番号（例: `DL-HR-RG-2024-007`）／監査トレース |
-| `doc_title` | string | 規程名（人間可読） |
-| `doc_version` | string | バージョン（例: `v3`）／旧版との並走時のフィルタキー |
-| `last_revised` | string | 改訂日（`YYYY-MM-DD`）／Phase 4 自動再Embedding の差分検知 |
-| `doc_type` | string | 文書種別（`regulation` / `manual` / `faq` 等）／複数ナレッジ運用時のフィルタ |
-| `category` | string | 部門カテゴリ（`総務` / `経理` / `物流` 等） |
+| `doc_id` | string | Policy number (e.g. `DL-HR-RG-2024-007`) / audit trace |
+| `doc_title` | string | Policy title (human-readable) |
+| `doc_version` | string | Version (e.g. `v3`) / filter key when old and new versions run side by side |
+| `last_revised` | string | Revision date (`YYYY-MM-DD`) / change detection for Phase 4 automatic re-embedding |
+| `doc_type` | string | Document type (`regulation` / `manual` / `faq`, etc.) / filter when running multiple knowledge sources |
+| `category` | string | Department category (`総務` General Affairs / `経理` Accounting / `物流` Logistics, etc.) |
 
-> 💡 `last_revised` は Dify上 `time` 型でも定義可能（範囲フィルタが効く）。本デモでは設計書JSON仕様との整合性を優先し `string` で定義。複数版を期間並走させる本格運用時は `time` への変更を検討。
+> 💡 `last_revised` can also be defined as `time` in Dify (enables range filters). This demo uses `string` to stay consistent with the JSON spec in this document. Consider switching to `time` for production use where several versions run in parallel for a period.
 
-##### Step 2：ドキュメントへの値の割り当て
+##### Step 2: Assign values to the document
 
-`Documents` タブ → 規程PDFの行 → `︙` → `Edit Metadata`（または行をクリック → `Metadata` セクション）で以下を入力：
+`Documents` tab → the policy document row → `︙` → `Edit Metadata` (or click the row → `Metadata` section), and enter:
 
 ```json
 {
@@ -417,93 +437,96 @@ UIの `Retrieval Setting` カードから3択がある。**`Hybrid Search` を�
 }
 ```
 
-完了確認：Metadata画面に戻り、各フィールドが `0 Values` → **`1 Value`** に変わっていればOK。
+(`doc_title` = "Travel & Expense and HR Procedures Policy", `category` = General Affairs.)
 
-##### Step 3（推奨）：Built-in メタデータの有効化
+To confirm: back on the Metadata screen, each field should change from `0 Values` to **`1 Value`**.
 
-Metadata画面下部の `Built-in` トグルを **ON** にすると、以下5フィールドが**自動入力で無料取得**できる。監査ログとしても有用。
+##### Step 3 (recommended): Enable built-in metadata
 
-| Field | Type | 内容 |
+Turning **ON** the `Built-in` toggle at the bottom of the Metadata screen gives you these five fields **filled in automatically, for free**. Useful as an audit log too.
+
+| Field | Type | Contents |
 |---|---|---|
-| `document_name` | string | ファイル名（PDFファイル名） |
-| `uploader` | string | アップロード者 |
-| `upload_date` | time | アップロード日時 |
-| `last_update_date` | time | 最終更新日時 |
-| `source` | string | ソース種別（PDF/TXT等） |
+| `document_name` | string | File name |
+| `uploader` | string | Who uploaded it |
+| `upload_date` | time | Upload timestamp |
+| `last_update_date` | time | Last update timestamp |
+| `source` | string | Source type (PDF/TXT, etc.) |
 
-##### メタデータが効くタイミング（=単一ドキュメント運用では不要）
+##### When metadata matters (not needed for a single document)
 
-| シナリオ | メタデータ必要性 |
+| Scenario | Metadata needed? |
 |---|---|
-| 規程PDF1本のみ（本デモ撮影時） | **不要**（無くても動作に影響なし） |
-| 規程＋手順書＋FAQ など複数ドキュメント | `doc_type` でフィルタ必要 |
-| 規程の v3 と v2 を期間限定で並走 | `doc_version` + `last_revised` でフィルタ必要 |
-| 部門別Bot（総務/経理/物流の独立Bot） | `category` でフィルタ必要 |
-| Phase 4（自動再Embedding） | `last_revised` で差分検知 |
-| 監査要件（回答時の参照版を記録） | `doc_id` + `doc_version` を回答ログに残す |
+| One policy document only (this demo recording) | **Not needed** (no effect on behavior without it) |
+| Multiple documents: policy + procedures + FAQ | Filter by `doc_type` |
+| Policy v3 and v2 running side by side for a limited period | Filter by `doc_version` + `last_revised` |
+| Per-department bots (separate General Affairs / Accounting / Logistics bots) | Filter by `category` |
+| Phase 4 (automatic re-embedding) | Change detection via `last_revised` |
+| Audit requirement (record which version an answer referenced) | Keep `doc_id` + `doc_version` in the answer log |
 
-> Citation はメタデータではなく**規程本文ヘッダー**（"文書番号：DL-HR-RG-2024-007"）から LLM が抽出する設計のため、メタデータ未設定でも引用は機能する。
+> Citations are designed to be extracted by the LLM from the **policy text header** ("文書番号：DL-HR-RG-2024-007", document number), not from metadata, so citations work even without metadata.
 
-### 3-4. 動作確認用テストクエリ（10件）
-本番リリース前に以下のクエリでRecall@4を確認すること。
+### 3-4. Test queries for verification (10)
+Check Recall@4 with these queries before any production release.
 
-| # | テストクエリ | 期待ヒット条文 |
-|---|---|---|
-| 1 | 深夜帰りのタクシー代いくら？ | 第5条 第1項 |
-| 2 | クライアントとタクシー乗っていいの？ | 第5条 第2項 |
-| 3 | タクシー上限超えた | 第5条 第4項（F-021） |
-| 4 | 経費の締め切りいつ？ | 第8条 第1項 |
-| 5 | テンプレ v3 どこ？ | 第9条 第2項 |
-| 6 | 25日過ぎちゃった | 第8条 第3・4項 |
-| 7 | 保険証なくした | 第15条 |
-| 8 | 夜勤手当いくら？ | 第13条 |
-| 9 | 深夜シフトいつまでに申請？ | 第14条 第1項 |
-| 10 | 新幹線グリーン車乗れる？ | 第4条 第2項 |
+| # | Test query | Meaning | Expected clause |
+|---|---|---|---|
+| 1 | 深夜帰りのタクシー代いくら？ | Late-night taxi home: how much? | Art. 5 §1 |
+| 2 | クライアントとタクシー乗っていいの？ | Can I take a taxi with a client? | Art. 5 §2 |
+| 3 | タクシー上限超えた | I went over the taxi cap | Art. 5 §4 (F-021) |
+| 4 | 経費の締め切りいつ？ | When is the expense deadline? | Art. 8 §1 |
+| 5 | テンプレ v3 どこ？ | Where is template v3? | Art. 9 §2 |
+| 6 | 25日過ぎちゃった | I missed the 25th | Art. 8 §3–4 |
+| 7 | 保険証なくした | I lost my health insurance card | Art. 15 |
+| 8 | 夜勤手当いくら？ | How much is the night-shift allowance? | Art. 13 |
+| 9 | 深夜シフトいつまでに申請？ | When must I file for a night shift? | Art. 14 §1 |
+| 10 | 新幹線グリーン車乗れる？ | Can I ride Shinkansen first class? | Art. 4 §2 |
 
-各クエリで期待条文がTop 4内にヒットすればRecall@4=100%。本番品質の目安はRecall@4 >= 90%。
+If the expected clause is in the Top 4 for every query, Recall@4 = 100%. The production-quality bar is Recall@4 >= 90%.
 
-#### 実測結果（2026-08-06、`scripts/measure_recall.py`）
+#### Measured results (2026-08-06, `scripts/measure_recall.py`)
 
-構成：Hybrid Search + Weighted Score（0.7 / 0.3）／ Top K = 4 ／ Score Threshold = 0.3
-／ Embedding: text-embedding-3-large ／ Parent-Child（Parent 1,400 / Child 250）
+Configuration: Hybrid Search + Weighted Score (0.7 / 0.3) / Top K = 4 / Score Threshold = 0.3
+/ Embedding: text-embedding-3-large / Parent-Child (Parent 1,400 / Child 250)
 
 ```
 Recall@4 = 10/10 = 100%   (target: >= 90%)
 
   in-scope     top-score  0.3623 .. 0.6438
-  out-of-scope top-score  0.0000 .. 0.3849   （4問中3問は0件）
+  out-of-scope top-score  0.0000 .. 0.3849   (3 of 4 return zero hits)
 ```
 
-10問すべてで期待条文が Top 4 に入った。閾値 0.3 の適用下で圏外クエリ4問のうち3問は
-ヒット0件となり、残る1問（「有給休暇は何日もらえますか？」＝規程に記載が無い労務系の質問）
-のみ 0.3849 で通過する。この1問は §1-2 のシステムプロンプトが定型文で突っぱねる。
+For all 10 questions the expected clause was in the Top 4. With the 0.3 threshold applied, 3 of the
+4 out-of-scope queries return zero hits, and only one ("有給休暇は何日もらえますか？", how many days of
+paid leave, an HR question the policy does not cover) gets through at 0.3849. The §1-2 system prompt
+refuses that one with the fixed message.
 
-再現：
+To reproduce:
 ```bash
 python3 scripts/measure_recall.py --threshold 0.3
 ```
 
 ---
 
-## 4. n8n Webhook連携ロジック
+## 4. n8n webhook integration logic
 
-### 4-1. インテント検出ロジック（Dify側）
+### 4-1. Intent detection logic (Dify side)
 
-ノード② Question Classifier で **「クラス2：ファイル要求」** に分類された場合、以下の処理を行う。
+When node ② Question Classifier assigns **"Class 2: file request"**, the following happens.
 
-#### ノード⑥ HTTP Request 設定
+#### Node ⑥ HTTP Request settings
 
-| 項目 | 設定値 |
+| Item | Value |
 |---|---|
-| メソッド | POST |
+| Method | POST |
 | URL | `https://n8n.demo-logistics.example.co.jp/webhook/expense-template` |
-| ヘッダー | `Content-Type: application/json` |
-| ヘッダー | `X-Auth-Token: {{#env.N8N_WEBHOOK_TOKEN#}}` |
-| ボディ（JSON） | 下記参照 |
-| タイムアウト | 10秒 |
-| リトライ | 2回（指数バックオフ） |
+| Header | `Content-Type: application/json` |
+| Header | `X-Auth-Token: {{#env.N8N_WEBHOOK_TOKEN#}}` |
+| Body (JSON) | See below |
+| Timeout | 10 seconds |
+| Retries | 2 (exponential backoff) |
 
-**リクエストボディ（JSON）：**
+**Request body (JSON):**
 ```json
 {
   "intent": "request_expense_template",
@@ -518,13 +541,17 @@ python3 scripts/measure_recall.py --threshold 0.3
 }
 ```
 
-> ⚠️ **`{{#sys.timestamp#}}`** であること。v1.4 の `{{#sys.current_time#}}` という
-> システム変数は Dify に存在しない（`SystemVariableKey` に定義されているのは
-> `query` / `files` / `conversation_id` / `user_id` / `dialogue_count` / `app_id` /
-> `workflow_id` / `workflow_run_id` / `timestamp` など）。存在しない変数は空文字に
-> なるだけでエラーにならないため、気付きにくい。
+> ⚠️ **It must be `{{#sys.timestamp#}}`.** The `{{#sys.current_time#}}` system variable used in v1.4
+> does not exist in Dify (`SystemVariableKey` defines `query` / `files` / `conversation_id` /
+> `user_id` / `dialogue_count` / `app_id` / `workflow_id` / `workflow_run_id` / `timestamp`, etc.).
+> A nonexistent variable just becomes an empty string without an error, so it is easy to miss.
 
-#### ノード⑥のレスポンスを使った最終回答（⑧ Answer ノード）
+#### Final answer using node ⑥'s response (⑧ Answer node)
+
+Japanese reply text for the full cloud variant. In English: "Your expense template is ready. A
+download link has been sent to you on Slack (#general or DM). [File sent] expense template v3,
+stored at shared drive → 02_General Affairs. [Note] Deadline: 17:00 on the 25th of each month
+(Art. 8). Always enable macros (Art. 9 §4). [Source] DL-HR-RG-2024-007 Arts. 8 and 9."
 
 ```text
 経費精算テンプレートをご用意しました。Slack（#general またはDM）にダウンロードリンクをお送りしました。
@@ -543,7 +570,7 @@ python3 scripts/measure_recall.py --threshold 0.3
 
 ---
 
-### 4-2. n8n 側ワークフロー設計（フロー図テキスト）
+### 4-2. n8n workflow design (flow diagram)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -559,24 +586,24 @@ python3 scripts/measure_recall.py --threshold 0.3
 │    intent      = {{$json.intent}}                           │
 │    template_key= {{$json.metadata.template_key}}            │
 │       ↓                                                      │
-│  [Node 3: Switch (intent別ルーティング)]                     │
+│  [Node 3: Switch (route by intent)]                         │
 │    ├─ "request_expense_template"  → Node 4                  │
-│    ├─ "request_taxi_form"         → 将来拡張                 │
-│    └─ default                     → Node 99 (エラー応答)     │
+│    ├─ "request_taxi_form"         → future extension        │
+│    └─ default                     → Node 99 (error reply)   │
 │       ↓                                                      │
 │  [Node 4: Google Drive - Get Shared Link]                   │
-│    File ID: <経費精算テンプレート_v3.xlsx の固定ID>          │
+│    File ID: <fixed ID of 経費精算テンプレート_v3.xlsx>        │
 │    Mode: Generate shareable link (anyone with link, viewer) │
 │    Output: $json.webViewLink                                │
 │       ↓                                                      │
 │  [Node 5: Lookup Slack User ID]                             │
-│    (HRシステムまたはGoogle Workspace Directory経由で          │
-│     dify user_id → Slack user_id を解決)                     │
+│    (resolve dify user_id → Slack user_id via the HR system  │
+│     or the Google Workspace Directory)                      │
 │       ↓                                                      │
 │  [Node 6: Slack - Send Direct Message]                      │
 │    Channel: {{$node["Node 5"].json.slack_user_id}}          │
-│    Text: (下記テンプレ参照)                                   │
-│    Blocks: Block Kit形式（後述）                              │
+│    Text: (see template below)                               │
+│    Blocks: Block Kit format (see below)                     │
 │       ↓                                                      │
 │  [Node 7: Log to Google Sheets]                             │
 │    Sheet: "DifyBot_FileRequest_Log"                         │
@@ -589,7 +616,11 @@ python3 scripts/measure_recall.py --threshold 0.3
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 4-3. Slack Block Kit ペイロード（Node 6）
+### 4-3. Slack Block Kit payload (Node 6)
+
+The card's texts are Japanese: header "Here is your expense template", fields for file name,
+deadline and policy reference, buttons "Download" and "View policy", and a footer "Sent
+automatically by Demo-Logi-Bot | Questions: Sato, General Affairs (ext. 1234)".
 
 ```json
 {
@@ -637,46 +668,50 @@ python3 scripts/measure_recall.py --threshold 0.3
 }
 ```
 
-### 4-4. エラーハンドリング（Node 99）
+### 4-4. Error handling (Node 99)
 
-| エラーケース | 対処 |
+| Error case | Handling |
 |---|---|
-| Slackユーザー解決失敗 | 総務部チャンネル `#admin-bot-alert` に通知し、`#general` にパブリック投稿でフォールバック |
-| Google Drive取得失敗 | 30秒後に1回リトライ。失敗時はDify側にHTTP 500を返し、Dify側で「総務部に直接ご連絡ください」とフォールバック |
-| Webhook認証失敗 | 即時 401 を返し、ログに記録 |
+| Slack user lookup fails | Notify the General Affairs channel `#admin-bot-alert` and fall back to a public post in `#general` |
+| Google Drive fetch fails | Retry once after 30 seconds. On failure return HTTP 500 to Dify, which falls back to "please contact General Affairs directly" |
+| Webhook authentication fails | Return 401 immediately and log it |
 
-### 4-5. セキュリティ
+### 4-5. Security
 
-- **Webhook URL は推測困難なランダム文字列**を含むパス（例：`/webhook/expense-template-9d7f3a2c`）にする
-- **X-Auth-Token** ヘッダーによる共有秘密での認証（Dify環境変数 → n8n Credentials）
-- n8n 側は **IP Allowlist** で Dify インスタンスからのアクセスのみ許可（Self-host時）
-- ログには PII（個人情報）を残さない（user_id のみ、氏名・メールは記録しない）
+- Use a webhook path containing **a hard-to-guess random string** (e.g. `/webhook/expense-template-9d7f3a2c`)
+- Authenticate with a shared secret in the **X-Auth-Token** header (Dify environment variable → n8n credentials)
+- On the n8n side, use an **IP allowlist** so only the Dify instance can connect (when self-hosted)
+- Keep no PII in logs (user_id only; never record names or e-mail addresses)
 
 ---
 
-### 4-6. シンプル運用パターン：Google Drive URL を直接返答する方式（推奨スタートアップ構成）
+### 4-6. Simple pattern: replying with a Google Drive URL directly (recommended starter setup)
 
-n8n / Slack / 個別ユーザー解決まで構築する前段階として、もしくは小規模運用では、**「リンクを知っていれば閲覧可」設定の Google Drive URL を Dify がそのまま返す**だけのシンプル版でも実用に耐えます。本デモのリポジトリには、その配布対象となるダミー Excel `経費精算テンプレート_v3.xlsx` を同梱しています。
+Before building n8n, Slack and per-user resolution, or for small deployments, a simple version in which **Dify just returns a Google Drive URL shared as "anyone with the link can view"** is perfectly usable. This repository ships the dummy Excel file to distribute, `経費精算テンプレート_v3.xlsx`.
 
-#### ① Google Drive 側の準備
+#### ① Preparing Google Drive
 
-1. `経費精算テンプレート_v3.xlsx` を社内共有ドライブ（例：`02_総務部` フォルダ）にアップロード。
-2. ファイルを右クリック → 「共有」→ **「リンクを知っている全員」** に変更し、権限を **「閲覧者（Viewer）」** に設定。
-   - 社内利用に限定する場合は「組織ドメイン内でリンクを知っている全員（demo-logistics.example.co.jp）」に絞る運用が望ましい。
-3. 「リンクをコピー」で得られる URL（例：`https://drive.google.com/file/d/1aBcDEFghiJKLmnOPqrSTuvWxyz0123456/view?usp=sharing`）を Dify の環境変数 `EXPENSE_TEMPLATE_URL` として登録する。
+1. Upload `経費精算テンプレート_v3.xlsx` to the internal shared drive (e.g. the `02_総務部` / General Affairs folder).
+2. Right-click the file → "Share" → change to **"Anyone with the link"** and set the permission to **"Viewer"**.
+   - For internal use only, it is better to restrict it to "anyone in the organization's domain with the link (demo-logistics.example.co.jp)".
+3. Register the URL from "Copy link" (e.g. `https://drive.google.com/file/d/1aBcDEFghiJKLmnOPqrSTuvWxyz0123456/view?usp=sharing`) as the Dify environment variable `EXPENSE_TEMPLATE_URL`.
 
-> 注意：「リンクを知っている全員」設定は推測困難な File ID に依存したセキュリティです。本当に機密性の高いファイルには適しません。本テンプレートは雛形で機微情報を含まないため、この運用が許容されます。
+> Note: "anyone with the link" security relies on the File ID being hard to guess. It is not suitable for truly confidential files. This template is a blank form with no sensitive information, so this approach is acceptable.
 
-#### ② Dify 側のフロー（簡素版）
+#### ② Dify flow (simplified)
 
-ノード② Question Classifier で **「クラス2：ファイル要求」** に分類された場合、n8n Webhook を呼ばずに、**直接 Answer ノード**で固定文言＋URL を返します。
+When node ② Question Classifier assigns **"Class 2: file request"**, skip the n8n webhook and return fixed text plus the URL **directly from an Answer node**.
 
 ```
 [② Question Classifier]
-   └─ クラス2 (ファイル要求) → [⑥' Answer (固定文+URL)]  ← n8n を経由しない
+   └─ Class 2 (file request) → [⑥' Answer (fixed text + URL)]  ← does not go through n8n
 ```
 
-ノード⑥' Answer の本文（コピペ用）：
+Body of node ⑥' Answer (copy-paste). In English it says: the template can be downloaded from
+the Google Drive link; lists the five sheets (expense report, taxi log for Art. 5, advance
+settlement for Art. 12, category master, instructions); the deadline (17:00 on the 25th, Art. 8);
+that old v2 forms are rejected (Art. 9 §3); that taxi rides over JPY 15,000 require form F-021
+(Art. 5 §4); and the source and contacts.
 
 ```text
 経費精算テンプレートはこちらのGoogle Driveリンクからダウンロードできます。
@@ -703,50 +738,52 @@ n8n / Slack / 個別ユーザー解決まで構築する前段階として、も
 窓口：総務部 佐藤（内線1234）／ 経理部 鈴木（内線1456）
 ```
 
-#### ③ Dify 環境変数
+#### ③ Dify environment variable
 
-`Settings ➔ Environment Variables` に以下を追加：
+Add the following under `Settings ➔ Environment Variables`:
 
 | Key | Value | Type |
 |---|---|---|
-| `EXPENSE_TEMPLATE_URL` | `https://drive.google.com/file/d/<FILE_ID>/view?usp=sharing` | Secret（マスク表示推奨） |
+| `EXPENSE_TEMPLATE_URL` | `https://drive.google.com/file/d/<FILE_ID>/view?usp=sharing` | Secret (masked display recommended) |
 
-#### ④ シンプル版 vs フル版（n8n 経由）の比較
+#### ④ Simple version vs. full version (through n8n)
 
-| 観点 | シンプル版（4-6） | フル版（4-1〜4-5） |
+| Aspect | Simple version (4-6) | Full version (4-1 to 4-5) |
 |---|---|---|
-| 実装工数 | 低（Dify のみ、Answer ノード1つ追加） | 中〜高（n8n + Slack + Drive API + Sheets ログ） |
-| 監査ログ | Dify の会話ログのみ | n8n の Sheets ログで構造化記録 |
-| 配信チャネル | チャット内 URL（コピペ） | Slack DM に Block Kit ボタン |
-| ユーザー識別 | 不要 | dify user_id → Slack user_id 解決が必要 |
-| ファイル更新時の対応 | URL はそのままで Drive 側を上書き保存 | URL はそのままで Drive 側を上書き保存 |
-| 推奨ユースケース | PoC・小規模社内・予算制約あり | 50名以上・監査要件あり・Slack 文化が定着 |
+| Implementation effort | Low (Dify only, one extra Answer node) | Medium to high (n8n + Slack + Drive API + Sheets log) |
+| Audit log | Dify conversation logs only | Structured records in n8n's Sheets log |
+| Delivery channel | URL in the chat (copy-paste) | Block Kit button in a Slack DM |
+| User identification | Not needed | Must resolve dify user_id → Slack user_id |
+| When the file is updated | Overwrite on Drive; the URL stays the same | Overwrite on Drive; the URL stays the same |
+| Recommended for | PoC, small internal use, tight budgets | 50+ employees, audit requirements, established Slack culture |
 
-#### ⑤ ダミーファイル `経費精算テンプレート_v3.xlsx`（本リポジトリ同梱）
+#### ⑤ Dummy file `経費精算テンプレート_v3.xlsx` (included in this repository)
 
-本リポジトリの `経費精算テンプレート_v3.xlsx` は、規程 DL-HR-RG-2024-007 に準拠した形で、以下を含みます。デモ動画では実際にこのファイルを Drive にアップロードし、Bot がリンクを返すまでを撮影できます。
+The repository's `経費精算テンプレート_v3.xlsx` complies with policy DL-HR-RG-2024-007 and contains the following. In the demo video you can actually upload it to Drive and record the bot returning the link.
 
-- 「経費精算書」シート：申請者情報ヘッダー、9件のサンプル明細（電車・新幹線・タクシー昼夜・宿泊・接待・消耗品）、SUM 数式による自動集計、仮払金控除、5者承認欄、F-021 ／ F-007 注記
-- 「タクシー利用明細」シート：規程第5条準拠の乗車時刻・降車時刻・乗車地・降車地・F-021 ステータス欄
-- 「仮払い精算」シート：仮払金額と実費の差額自動計算
-- 「区分マスタ」シート：ドロップダウン用の13区分と勘定科目・規程参照
-- 「記入要領」シート：提出期限・タクシー上限・領収書ルール・問い合わせ窓口の集約
+- "Expense report" sheet: applicant header, 9 sample line items (train, Shinkansen, day and night taxi, lodging, client entertainment, supplies), automatic totals with SUM formulas, advance-payment deduction, a five-person approval block, F-021 / F-007 notes
+- "Taxi log" sheet: boarding time, drop-off time, pick-up and drop-off locations and F-021 status, per Article 5
+- "Advance settlement" sheet: automatic calculation of the difference between advance and actual cost
+- "Category master" sheet: 13 categories for drop-downs with account codes and policy references
+- "Instructions" sheet: deadline, taxi cap, receipt rules and contacts in one place
 
-ファイル再生成は `python3 scripts/build_expense_template.py` で再現可能（`openpyxl` 必要）。
+Regenerate the file with `python3 scripts/build_expense_template.py` (requires `openpyxl`).
 
 ---
 
-### 4-7. 完全ローカルDocker構成（中小企業案件向け本命パターン）
+### 4-7. Fully local Docker setup (the primary pattern for SME projects)
 
-§4-1〜4-5（クラウドAPI連携フル版）と§4-6（Drive直URL返答シンプル版）の中間に位置する、**「すべて社内サーバー内で完結する」**第3のパターン。中小企業の経営者に「データは外に出ません」と言い切れるため、本デモのデフォルトとして推奨する。
+A third pattern that sits between §4-1 to 4-5 (the full cloud-API version) and §4-6 (the simple
+Drive-URL version): **everything runs on the company's own server**. Because it lets you tell SME
+owners "your data never leaves the building" and mean it, it is the recommended default for this demo.
 
-#### ① アーキテクチャ全体像
+#### ① Architecture overview
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│  社内サーバー / 開発Mac（Docker host）                          │
+│  On-prem server / development Mac (Docker host)                  │
 │                                                                  │
-│  共有ネットワーク: demo-rag-net (external bridge)                │
+│  Shared network: demo-rag-net (external bridge)                  │
 │  ┌─────────────────────────┬──────────────────────────────────┐ │
 │  │  [Dify Self-Hosted]      │  [n8n Self-Hosted]                │ │
 │  │  - api / worker / web    │  - n8n_local container            │ │
@@ -761,15 +798,15 @@ n8n / Slack / 個別ユーザー解決まで構築する前段階として、も
             │                         │
        [Employee's Browser]      [Employee's Browser]
 
-  Dify→n8n 内部呼び出し: http://n8n_local:5678/webhook/<UUID>  (Docker内DNS)
-  Browser→ファイル取得: http://localhost:5678/webhook/files/expense-v3 (host port)
+  Dify→n8n internal call:  http://n8n_local:5678/webhook/<UUID>  (Docker DNS)
+  Browser→file download:   http://localhost:5678/webhook/files/expense-v3 (host port)
 ```
 
-> 💡 **「URLの二刀流」がポイント**：Difyから見た n8n は内部DNS名 `n8n_local`、ブラウザから見た n8n は `localhost`。Difyが返すJSONの `download_url` は**ブラウザがアクセスする URL**（`localhost:5678`）を入れること。`n8n_local:5678` を入れるとブラウザでは解決できず "ERR_NAME_NOT_RESOLVED" になる。
+> 💡 **The key is the "two URLs" design:** from Dify, n8n is the internal DNS name `n8n_local`; from the browser, n8n is `localhost`. The `download_url` in the JSON returned to Dify must be **the URL the browser will open** (`localhost:5678`). With `n8n_local:5678` the browser cannot resolve it and fails with "ERR_NAME_NOT_RESOLVED".
 
-#### ② n8n ワークフロー（2本構成）
+#### ② n8n workflows (two)
 
-##### Workflow 1：Intent Dispatcher（POST受け）
+##### Workflow 1: Intent Dispatcher (receives POST)
 
 ```
 [Webhook] → [Edit Fields] → [Switch] ─Output 0 (expense)─→ [Respond to Webhook (JSON)]
@@ -777,39 +814,43 @@ n8n / Slack / 個別ユーザー解決まで構築する前段階として、も
                                       └─Fallback───────────→ [Respond to Webhook (400)]
 ```
 
-| ノード | 設定 |
+| Node | Settings |
 |---|---|
-| Webhook | Method: POST / Path: 推測困難なUUID / Auth: Header Auth (`X-Auth-Token`) / Respond: **`Using 'Respond to Webhook' Node`** ⚠️必須 |
-| Edit Fields | Manual Mapping で `user_id={{$json.body.user_id}}`, `intent={{$json.body.intent}}`, `template_key={{$json.body.metadata.template_key}}` |
+| Webhook | Method: POST / Path: hard-to-guess UUID / Auth: Header Auth (`X-Auth-Token`) / Respond: **`Using 'Respond to Webhook' Node`** ⚠️ required |
+| Edit Fields | Manual Mapping: `user_id={{$json.body.user_id}}`, `intent={{$json.body.intent}}`, `template_key={{$json.body.metadata.template_key}}` |
 | Switch | Mode: Rules / Output 0 = `intent equals "request_expense_template"` / Output 1 = `intent equals "request_taxi_form"` / Fallback Output = **Extra Output** ⚠️ |
-| Respond to Webhook (Output 0) | JSON, Code 200, Body は §4-7 ④の通り（`download_url` 含む） |
-| Respond to Webhook (Fallback) | JSON, Code 400, "Unknown intent" メッセージ |
+| Respond to Webhook (Output 0) | JSON, code 200, body as in §4-7 ④ (includes `download_url`) |
+| Respond to Webhook (Fallback) | JSON, code 400, "Unknown intent" message |
 
-##### Workflow 2：File Server（GET受け、バイナリ応答）
+##### Workflow 2: File Server (receives GET, binary response)
 
 ```
 [Webhook (GET)] ─→ [Read/Write Files from Disk] ─→ [Respond to Webhook (Binary)]
 ```
 
-| ノード | 設定 |
+| Node | Settings |
 |---|---|
-| Webhook | Method: GET / Path: `files/expense-v3` / Auth: None（パス自体がトークン代わり）/ Respond: **`Using 'Respond to Webhook' Node`** |
-| Read/Write Files from Disk | Operation: `Read File(s) From Disk` / File Selector: **`/home/node/.n8n-files/expense_template_v3.xlsx`** ⚠️allowlist制約（§4-8参照） |
-| Respond to Webhook | Respond With: **`Binary`** / Input Field Name: `data` / Headers: `Content-Type` + `Content-Disposition`（RFC 5987形式、§4-8参照） |
+| Webhook | Method: GET / Path: `files/expense-v3` / Auth: None (the path itself acts as the token) / Respond: **`Using 'Respond to Webhook' Node`** |
+| Read/Write Files from Disk | Operation: `Read File(s) From Disk` / File Selector: **`/home/node/.n8n-files/expense_template_v3.xlsx`** ⚠️ allowlist restriction (see §4-8) |
+| Respond to Webhook | Respond With: **`Binary`** / Input Field Name: `data` / Headers: `Content-Type` + `Content-Disposition` (RFC 5987 form, see §4-8) |
 
-#### ③ Dify HTTP Request ノードの設定（Self-Hosted版）
+#### ③ Dify HTTP Request node settings (self-hosted)
 
-| 項目 | 設定値 |
+| Item | Value |
 |---|---|
-| メソッド | POST |
-| **URL** | **`http://n8n_local:5678/webhook/<Workflow1のUUID>`**（Docker内部DNS名） |
-| ヘッダー | `Content-Type: application/json` |
-| ヘッダー | `X-Auth-Token: {{#env.N8N_WEBHOOK_TOKEN#}}` |
-| ボディ（JSON） | §4-1と同じ |
+| Method | POST |
+| **URL** | **`http://n8n_local:5678/webhook/<Workflow 1 UUID>`** (Docker internal DNS name) |
+| Header | `Content-Type: application/json` |
+| Header | `X-Auth-Token: {{#env.N8N_WEBHOOK_TOKEN#}}` |
+| Body (JSON) | Same as §4-1 |
 
-> ⚠️ Cloud版Difyから叩く場合は `http://n8n_local:...` ではなく、ngrok等で公開した `https://xxxx.ngrok-free.app/webhook/<UUID>` を使う必要がある（§4-1のクラウド前提URL）。本構成は**Self-Hosted前提**。
+> ⚠️ When calling from Dify Cloud, `http://n8n_local:...` does not work; use a URL exposed with ngrok or similar, such as `https://xxxx.ngrok-free.app/webhook/<UUID>` (the cloud-style URL in §4-1). This setup **assumes self-hosting**.
 
-#### ④ Workflow 1 Output 0 が返す JSON（コピペ用）
+#### ④ JSON returned by Workflow 1 Output 0 (copy-paste)
+
+The user-facing values are Japanese: `message` = "Your expense template is ready; download it from
+the URL below", `deadline` = "must arrive by 17:00 on the 25th of each month", `macro_warning` =
+"always enable macros (Art. 9 §4)".
 
 ```json
 {
@@ -824,16 +865,16 @@ n8n / Slack / 個別ユーザー解決まで構築する前段階として、も
 }
 ```
 
-#### ⑤ Dify Answer ノードでの回答整形
+#### ⑤ Formatting the answer in the Dify Answer node
 
-> ⚠️ **HTTP Request ノードの直後に Code ノードが必要。** HTTP Request ノードの出力
-> `body` は **JSON文字列**であってオブジェクトではない
-> （`graphon/nodes/http_request/node.py`: `outputs["body"] = response.text`）。
-> そのため `{{#n8n_webhook.body.message#}}` も v1.4 の
-> `{{#http_request.response.message#}}` も解決されず、Answer が**空文字で出力される**。
-> エラーにならないので原因が分かりにくい（§4-8 ⑨）。
+> ⚠️ **A Code node is required right after the HTTP Request node.** The HTTP Request node's
+> `body` output is a **JSON string**, not an object
+> (`graphon/nodes/http_request/node.py`: `outputs["body"] = response.text`).
+> So neither `{{#n8n_webhook.body.message#}}` nor v1.4's
+> `{{#http_request.response.message#}}` resolves, and the Answer **renders an empty string**.
+> No error is raised, so the cause is hard to see (§4-8 ⑨).
 
-**ノード⑥' Code（python3）** — n8n の JSON を変数に展開する：
+**Node ⑥' Code (python3)** — expands n8n's JSON into variables:
 
 ```python
 import json
@@ -845,14 +886,15 @@ def main(body: str) -> dict:
     return {key: str(data.get(key, "")) for key in keys}
 ```
 
-| 項目 | 設定値 |
+| Item | Value |
 |---|---|
-| 入力変数 | `body` ← `n8n_webhook / body` |
-| 出力変数 | `message` `filename` `download_url` `deadline` `macro_warning` `regulation_ref`（すべて string） |
+| Input variable | `body` ← `n8n_webhook / body` |
+| Output variables | `message` `filename` `download_url` `deadline` `macro_warning` `regulation_ref` (all string) |
 
-> Code ノードは Dify の `sandbox` コンテナ内で実行されるため、外部通信は増えない。
+> The Code node runs inside Dify's `sandbox` container, so it adds no external traffic.
 
-**ノード⑧' Answer** — ユーザー向け文章の整形：
+**Node ⑧' Answer** — formats the user-facing text (labels: 【ご注意】 Note, 提出期限 Deadline,
+【引用元】 Source, 規程 Policy, 窓口 Contacts):
 
 ```text
 {{#parse_response.message#}}
@@ -869,46 +911,45 @@ def main(body: str) -> dict:
 窓口：総務部 佐藤（内線1234）／ 経理部 鈴木（内線1456）
 ```
 
-#### ⑥ 共有ネットワーク戦略：external network 方式
+#### ⑥ Shared network strategy: the external-network approach
 
-n8n と Dify の `docker-compose.yml` は**それぞれ独立管理**しつつ、**外部ネットワーク `demo-rag-net` を共有**することで通信を確立する。これは Docker の標準パターンで、各stackが独立して up/down できる利点がある。
+The `docker-compose.yml` files for n8n and Dify are **managed independently**, and communication works by **sharing the external network `demo-rag-net`**. This is a standard Docker pattern, with the advantage that each stack can go up and down on its own.
 
-##### セットアップ手順（要約）
+##### Setup (summary)
 
 ```bash
-# 1. 共有ネットワーク作成（一度だけ）
+# 1. Create the shared network (once)
 docker network create demo-rag-net
 
-# 2. n8n の docker-compose.yml に network 設定追加（services + networks セクション）
-# 3. Dify 側は api / worker / ssrf_proxy の3つに networks 追加
-#    （override file で重ねる。本リポジトリの docker/dify/docker-compose.override.yaml 参照）
+# 2. Add network settings to n8n's docker-compose.yml (services + networks sections)
+# 3. On the Dify side, add networks to api / worker / ssrf_proxy
+#    (layered with an override file; see docker/dify/docker-compose.override.yaml in this repository)
 
-# 4. 両方再起動
+# 4. Restart both
 cd ~/n8n-local && docker compose down && docker compose up -d
 cd ~/dify-local/docker && docker compose down && docker compose up -d
 
-# 5. 疎通確認（curl で）
+# 5. Connectivity check (with curl)
 docker exec docker-api-1 curl -s http://n8n_local:5678/healthz
-# → {"status":"ok"} が返れば成功
+# → success if it returns {"status":"ok"}
 ```
 
-> ⚠️ **`ssrf_proxy` を忘れないこと。そして上の Step 5 は当てにならない。**
-> Dify は HTTP Request ノードにソケットを直接開かせず、**squid プロキシ
-> （`SSRF_PROXY_HTTP_URL=http://ssrf_proxy:3128`）経由**で送出する。つまり
-> `n8n_local` を名前解決する必要があるのは api / worker ではなく **squid** である。
+> ⚠️ **Do not forget `ssrf_proxy`. And Step 5 above cannot be trusted.**
+> Dify does not let the HTTP Request node open sockets directly; it sends traffic **through the
+> squid proxy (`SSRF_PROXY_HTTP_URL=http://ssrf_proxy:3128`)**. So the container that needs to
+> resolve `n8n_local` is **squid**, not api / worker.
 >
-> api と worker だけを共有ネットワークに繋ぐと、Step 5 の `docker exec docker-api-1 curl`
-> は **200 を返して成功する**のに、Chatflow だけが
-> `Reached maximum retries for URL http://n8n_local:5678/...` で失敗する。
-> 「疎通確認は通っているのに動かない」という最悪の切り分け状況になる。
+> If only api and worker join the shared network, Step 5's `docker exec docker-api-1 curl`
+> **returns 200 and succeeds**, while the Chatflow alone fails with
+> `Reached maximum retries for URL http://n8n_local:5678/...`.
+> That is the worst possible triage situation: "the connectivity check passes, but it doesn't work".
 >
-> さらにネットワークに参加させただけでは足りず、squid の ACL
-> （`http_access deny to_private_networks`）が 403 を返し、Dify はそれを
-> 「Access to '...' was blocked by SSRF protection」と報告する。Dify が用意している
-> 公式の抜け道が `SSRF_PROXY_ALLOW_PRIVATE_DOMAINS` 環境変数で、
-> `acl ... dstdomain` の許可ルールとして deny の前に挿入される。
-> サブネット全体ではなくホスト名1つだけを許可すれば、他の宛先に対する
-> SSRF 防御は維持される。詳細は §4-8 ⑩。
+> Joining the network is not enough either: squid's ACL
+> (`http_access deny to_private_networks`) returns 403, which Dify reports as
+> "Access to '...' was blocked by SSRF protection". Dify's official escape hatch is the
+> `SSRF_PROXY_ALLOW_PRIVATE_DOMAINS` environment variable, which is inserted as an
+> `acl ... dstdomain` allow rule before the deny. Allowing a single host name rather than a whole
+> subnet keeps SSRF protection in place for every other destination. Details in §4-8 ⑩.
 >
 > ```yaml
 > # docker-compose.override.yaml
@@ -919,20 +960,24 @@ docker exec docker-api-1 curl -s http://n8n_local:5678/healthz
 >       SSRF_PROXY_ALLOW_PRIVATE_DOMAINS: n8n_local
 > ```
 
-具体的な YAML 編集内容と完成形は本リポジトリの `docker/` ディレクトリを参照。
+See the `docker/` directory in this repository for the exact YAML edits and the finished files.
 
-#### ⑦ vs §4-1 / §4-6 比較
+#### ⑦ Comparison with §4-1 / §4-6
 
-| 観点 | §4-1 フル版（Drive+Slack API連携） | §4-6 Drive URL直返し | **§4-7 完全ローカル** |
+| Aspect | §4-1 full version (Drive + Slack API) | §4-6 Drive URL reply | **§4-7 fully local** |
 |---|---|---|---|
-| 外部API依存 | Google Drive API + Slack API + LLM + Rerank | Google Drive + LLM | **LLM（OpenAI）のみ** |
-| データの外部流出懸念 | あり（ファイル本体がGoogleに乗る） | あり | **規程本文と質問文が OpenAI に渡るのみ。ファイル本体・会話ログ・判断ロジックは社内に残る** |
-| インストール工数 | 高（GCP / Slack App 設定要） | 低 | 中（docker-compose編集要） |
-| クライアント説得力（中小企業） | △（経営者が懸念） | ○ | **◎（社内完結を視覚化できる）** |
-| 監査ログ | n8n→Sheets で構造化 | Difyログのみ | n8nログ＋オプションで内部DBへ |
-| 推奨ユースケース | 50名以上・既にSlack/Drive運用 | PoC・予算制約 | **中小企業の本番納品** |
+| External API dependencies | Google Drive API + Slack API + LLM + Rerank | Google Drive + LLM | **LLM (OpenAI) only** |
+| Data leakage concern | Yes (the files themselves sit on Google) | Yes | **Only policy excerpts and questions go to OpenAI. Files, conversation logs and routing logic stay in-house** |
+| Installation effort | High (GCP / Slack App setup) | Low | Medium (docker-compose edits) |
+| Persuasiveness for SME clients | △ (owners worry) | ○ | **◎ (you can show it stays in-house)** |
+| Audit log | Structured via n8n → Sheets | Dify logs only | n8n logs + optionally an internal DB |
+| Recommended for | 50+ employees, already on Slack/Drive | PoC, tight budgets | **Production delivery for SMEs** |
 
-#### ⑧ 「URLの二刀流」が刺さるデモ動画台詞
+#### ⑧ Demo video line that lands the "two URLs" point
+
+The line is delivered in Japanese. In English: "Take a look. The download URL for this expense
+template says 'localhost'. In other words, this process never touched the internet. The file and
+the bot's logic all stay inside your own server."
 
 ```
 「ご注目ください。この経費精算テンプレートのダウンロードURL、
@@ -941,54 +986,56 @@ docker exec docker-api-1 curl -s http://n8n_local:5678/healthz
  ファイルも、Botの判断ロジックも、すべて貴社サーバー内で完結しています」
 ```
 
-→ 経営者向けプレゼンで「データは外に出ない」を視覚的に証明する瞬間。
+→ The moment in an owner-facing presentation that visually proves "your data doesn't leave".
 
 ---
 
-### 4-8. 実装中に発見した運用ノウハウ集（実機検証済み）
+### 4-8. Operational lessons found during implementation (verified on real hardware)
 
-§4-7 の構成を実際にmacOS開発環境で構築した際に遭遇した、**ドキュメント・公式情報からは絶対に分からないハマりポイント**を記録する。本番納品時のクライアント環境（Linux）でも一部は再発するため、PoCで先に潰しておく価値がある。
+This section records the **traps you will never learn from the documentation or official material**,
+hit while actually building the §4-7 setup on a macOS development machine. Some of them recur on the
+client's production environment (Linux), so it is worth clearing them out during the PoC.
 
-- **①〜④**：n8n / Docker / macOS 側（初期構築時に判明）
-- **⑤〜⑪**：Dify 側（v1.5 の実機検証で判明。本文の該当箇所は修正済み）
+- **①–④:** n8n / Docker / macOS side (found during the initial build)
+- **⑤–⑪:** Dify side (found during the v1.5 live verification; the affected sections have been corrected)
 
-> ⑤以降に共通する特徴として、**どれもエラーにならず「静かに間違った状態」になる**。
-> 設定ミスが例外ではなく「空文字」「0件」「見出しごとの分割」として現れるため、
-> 動いているように見えて品質だけが落ちる。実測（`scripts/measure_recall.py`、
-> `scripts/test_e2e.py`）を挟まないと発見できない類のものばかりだった。
+> What ⑤ onward have in common: **none of them raise an error; they leave things "silently wrong"**.
+> Configuration mistakes show up not as exceptions but as "empty string", "zero results" or "split at
+> every heading", so everything appears to work while only the quality drops. Every one of them could
+> only be found by measuring (`scripts/measure_recall.py`, `scripts/test_e2e.py`).
 
-#### ① n8n のファイル配置パスは `/home/node/.n8n-files/` 配下必須
+#### ① n8n files must live under `/home/node/.n8n-files/`
 
-n8n の `Read/Write Files from Disk` ノードは、デフォルトで**特定のパス配下しかアクセスできない**サンドボックス制約がある。
+n8n's `Read/Write Files from Disk` node has a sandbox restriction: by default it **can only access a specific path**.
 
-| 症状 | エラーメッセージ |
+| Symptom | Error message |
 |---|---|
-| 任意のパス（例：`/home/node/files/`）を指定 | `Access to the file is not allowed. Allowed paths: /home/node/.n8n-files` |
+| Any other path specified (e.g. `/home/node/files/`) | `Access to the file is not allowed. Allowed paths: /home/node/.n8n-files` |
 
-**対処**：
-- bind mount 先を **`/home/node/.n8n-files`** に揃える（推奨）
-- どうしても他のパスを使いたい場合は環境変数 `N8N_RESTRICT_FILE_ACCESS_TO=/home/node/.n8n-files,/home/node/files` で許可リストを拡張
+**Fix:**
+- Point the bind mount at **`/home/node/.n8n-files`** (recommended)
+- If you really need another path, extend the allowlist with the environment variable `N8N_RESTRICT_FILE_ACCESS_TO=/home/node/.n8n-files,/home/node/files`
 
 ```yaml
 # docker-compose.yml
 services:
   n8n:
     volumes:
-      - ./templates:/home/node/.n8n-files    # ✅ 推奨パス
+      - ./templates:/home/node/.n8n-files    # ✅ recommended path
 ```
 
-#### ② Webhook ノードの Respond モードは `Using 'Respond to Webhook' Node` 必須
+#### ② The Webhook node's Respond mode must be `Using 'Respond to Webhook' Node`
 
-カスタムJSON応答やバイナリ応答を返したい場合、**Webhookノードの `Respond` 設定をデフォルトの `Immediately` から変更必須**。これを忘れると n8n が以下のバリデーションエラーを出す：
+To return a custom JSON or binary response, **you must change the Webhook node's `Respond` setting from the default `Immediately`**. Forget this and n8n raises a validation error:
 
 > `Unused Respond to Webhook node found in the workflow`
 
-意味：「Respond to Webhook ノードがワークフロー内にあるのに、Webhookは即時応答モードなので絶対に到達しない＝設定矛盾」
+Meaning: "there is a Respond to Webhook node in the workflow, but the Webhook responds immediately, so it can never be reached — a contradictory configuration".
 
-**対処**：
-1. Webhookノードのパラメータパネルを開く
-2. `Respond` ドロップダウンを **`Using 'Respond to Webhook' Node`** に変更
-3. 加えて、Switch等の分岐がある場合は**全てのアウトプット経路に Respond to Webhook ノードを配置**する（Fallback含む）
+**Fix:**
+1. Open the Webhook node's parameter panel
+2. Change the `Respond` drop-down to **`Using 'Respond to Webhook' Node`**
+3. If there is a Switch or other branching, **put a Respond to Webhook node on every output path** (including Fallback)
 
 ```
 [Switch] ─ Output 0 ─→ [Respond to Webhook (success 200)]
@@ -996,74 +1043,74 @@ services:
         └─ Fallback ─→ [Respond to Webhook (400)]
 ```
 
-#### ③ macOS開発環境では Google Drive 同期ファイルの拡張属性除去が必須
+#### ③ On a macOS development machine, extended attributes on Google Drive-synced files must be removed
 
-クライアントから「規程PDFはGoogle Driveに置いてあるんでこれ使ってください」と渡されたファイルを Mac の Docker bind mount で使おうとすると、**`EPERM: operation not permitted`** で読み込めない。
+If a client hands you a file with "the policy is on Google Drive, use that" and you try to use it through a Docker bind mount on a Mac, it fails with **`EPERM: operation not permitted`**.
 
-##### 原因
-Google Drive (drivefs) で同期されているファイルは、macOS の拡張属性として独自IDが付与される：
+##### Cause
+Files synced by Google Drive (drivefs) get their own ID as a macOS extended attribute:
 
 ```bash
 $ xattr -l 経費精算テンプレート_v3.xlsx
 com.apple.quarantine: ...
-com.google.drivefs.item-id#S: 1u0IuXsFRaDlb9CvKmlUvWcClvXEBH7Sf  ← これが主犯
+com.google.drivefs.item-id#S: 1u0IuXsFRaDlb9CvKmlUvWcClvXEBH7Sf  ← the main culprit
 com.apple.provenance: ...
 ```
 
-`com.google.drivefs.item-id` が macOS の VFS 層で独自の権限制御を入れており、Docker Desktop の bind mount を経由してコンテナ内に「特殊管理下のファイル」として伝播され、Node.js の `lstat` システムコールで EPERM が発生する。
+`com.google.drivefs.item-id` adds its own permission control at the macOS VFS layer. It propagates into the container through the Docker Desktop bind mount as a "specially managed file", and Node.js's `lstat` system call fails with EPERM.
 
-##### 対処
-ファイルを bind mount 配下に置く前に、すべての拡張属性を剥がす：
+##### Fix
+Strip every extended attribute before placing the file under the bind mount:
 
 ```bash
-xattr -c <ファイルパス>
+xattr -c <file path>
 ```
 
-確認：
+To confirm:
 ```bash
-xattr -l <ファイルパス>   # 何も出ない（または com.apple.macl のみ）が正常
-ls -la <ファイルパス>      # 末尾の @ マークが消えている
+xattr -l <file path>   # nothing (or only com.apple.macl) is normal
+ls -la <file path>      # the trailing @ mark is gone
 ```
 
-> 💡 `com.apple.macl` は macOS が自動付与するセキュリティ属性で、`xattr -c` でも消えない。これは **Docker bind mount に影響しない**ので無視してよい。
+> 💡 `com.apple.macl` is a security attribute macOS adds automatically, and `xattr -c` does not remove it. It **does not affect Docker bind mounts**, so ignore it.
 
-##### 本番納品時の注意
+##### Note for production delivery
 
-Linux サーバー環境（クライアントの本番社内サーバー）ではこの問題は発生しない（拡張属性自体が macOS 固有）。**開発・PoC環境（Mac）固有の問題**として認識し、PoC段階で潰しておく。
+This does not happen on a Linux server (the client's production server), because extended attributes of this kind are macOS-specific. Treat it as **a development / PoC (Mac) problem** and clear it during the PoC.
 
-#### ④ Content-Disposition ヘッダの RFC 5987 形式（日本語ファイル名対応）
+#### ④ RFC 5987 form of the Content-Disposition header (Japanese file names)
 
-Workflow 2（File Server）の `Respond to Webhook` ノードでバイナリ応答する際、ファイル名を**日本語のまま**ダウンロード保存させたい場合、`Content-Disposition` ヘッダーは **2形式併記**が必要。
+When Workflow 2 (File Server) returns a binary response from its `Respond to Webhook` node and you want the file saved **with its Japanese name**, the `Content-Disposition` header needs **both forms side by side**.
 
-##### 設定値
+##### Value
 
 ```text
 Content-Disposition: attachment; filename="expense_template_v3.xlsx"; filename*=UTF-8''%E7%B5%8C%E8%B2%BB%E7%B2%BE%E7%AE%97%E3%83%86%E3%83%B3%E3%83%97%E3%83%AC%E3%83%BC%E3%83%88_v3.xlsx
 ```
 
-| パート | 役割 | クライアント対応 |
+| Part | Role | Clients |
 |---|---|---|
-| `filename="expense_template_v3.xlsx"` | ASCII fallback | curl 8.x（macOS）など、RFC 5987非対応の古いクライアント |
-| `filename*=UTF-8''<percent-encoded>` | RFC 5987 標準 | Chrome / Safari / Firefox / Edge **全ブラウザ対応** |
+| `filename="expense_template_v3.xlsx"` | ASCII fallback | Older clients without RFC 5987 support, such as curl 8.x (macOS) |
+| `filename*=UTF-8''<percent-encoded>` | RFC 5987 standard | **All browsers**: Chrome / Safari / Firefox / Edge |
 
-##### 動作の違い
+##### Behavior
 
-| クライアント | 保存されるファイル名 |
+| Client | Saved file name |
 |---|---|
-| ブラウザ全般（Chrome等） | `経費精算テンプレート_v3.xlsx`（日本語） |
-| `curl -OJ`（macOS curl 8.x） | `expense_template_v3.xlsx`（ASCIIフォールバック） |
+| Browsers (Chrome, etc.) | `経費精算テンプレート_v3.xlsx` (Japanese) |
+| `curl -OJ` (macOS curl 8.x) | `expense_template_v3.xlsx` (ASCII fallback) |
 
-→ **エンドユーザーはブラウザでクリックする**ので、本番では日本語ファイル名で保存される。curlでASCIIになるのはコマンドライン特有のクセであって、サーバー側の問題ではない。
+→ **End users click in a browser**, so in production the file is saved under its Japanese name. curl saving it in ASCII is a command-line quirk, not a server-side problem.
 
-##### URLエンコード生成
+##### Generating the encoding
 
-「経費精算テンプレート_v3.xlsx」のRFC 5987 percent-encodedは：
+The RFC 5987 percent-encoding of "経費精算テンプレート_v3.xlsx" is:
 
 ```
 %E7%B5%8C%E8%B2%BB%E7%B2%BE%E7%AE%97%E3%83%86%E3%83%B3%E3%83%97%E3%83%AC%E3%83%BC%E3%83%88_v3.xlsx
 ```
 
-別ファイル名で運用する場合は Python で生成可能：
+For other file names, generate it with Python:
 
 ```python
 from urllib.parse import quote
@@ -1071,85 +1118,87 @@ quote("経費精算テンプレート_v3.xlsx")
 # → '%E7%B5%8C%E8%B2%BB%E7%B2%BE%E7%AE%97%E3%83%86%E3%83%B3%E3%83%97%E3%83%AC%E3%83%BC%E3%83%88_v3.xlsx'
 ```
 
-#### ⑤ チャンク区切り文字に日本語を使うと文字化けする
+#### ⑤ Japanese characters in the chunk delimiter get mangled
 
-Dify はチャンク区切り文字を `codecs.decode(separator, "unicode_escape")` に通す
-（`core/rag/splitter/fixed_text_splitter.py`）。この codec は非ASCII文字を破壊する。
+Dify runs the chunk delimiter through `codecs.decode(separator, "unicode_escape")`
+(`core/rag/splitter/fixed_text_splitter.py`). That codec destroys non-ASCII characters.
 
 ```python
 >>> import codecs
 >>> codecs.decode("\n第", "unicode_escape")
-'\nç¬¬'          # ← UTF-8 のバイト列が latin-1 として再解釈される
+'\nç¬¬'          # ← the UTF-8 bytes are reinterpreted as latin-1
 >>> codecs.decode("\n### ", "unicode_escape")
-'\n### '         # ← ASCII なら無傷
+'\n### '         # ← ASCII survives intact
 ```
 
-v1.4 の Delimiter `\n### \n#### \n第` は、この時点で `\n### \n#### \nç¬¬` になる。
-加えて Dify の区切り文字は**リストではなく単一の文字列**であり、
-`text.split(separator)` で使われる。つまり「### か #### か 第 のいずれかで分割」ではなく
-「`\n### \n#### \nç¬¬` という一続きの文字列で分割」を意味し、当然どこにもマッチしない。
+v1.4's delimiter `\n### \n#### \n第` becomes `\n### \n#### \nç¬¬` at this point.
+On top of that, Dify's delimiter is **a single string, not a list**, used as
+`text.split(separator)`. So it does not mean "split on ###, ####, or 第"; it means "split on the
+contiguous string `\n### \n#### \nç¬¬`", which of course matches nowhere.
 
-**対処**：区切り文字はASCIIのみ、かつ単一パターンにする。本デモでは `\n### `。
-条文が `### 第N条（...）` 形式の見出しになっていれば、これで条単位に分割できる。
+**Fix:** use an ASCII-only, single-pattern delimiter. In this demo, `\n### `.
+As long as articles are headed `### 第N条（...）`, this splits per article.
 
-#### ⑥ `.md` で投入するとチャンク設定が丸ごと無視される
+#### ⑥ Uploading as `.md` silently ignores the chunk settings
 
-Dify の Markdown 抽出器は、チャンク設定を適用する**前段**で、
-`re.match(r"^#+\s", line)` にマッチする**全ての見出し**でドキュメントを分割する
-（`core/rag/extractor/markdown_extractor.py`）。見出しレベルの区別は無い。
+Dify's Markdown extractor splits the document at **every heading** matching
+`re.match(r"^#+\s", line)` **before** the chunk settings are applied
+(`core/rag/extractor/markdown_extractor.py`). It does not distinguish heading levels.
 
-結果、`.md` を投入すると：
+So when you upload a `.md`:
 
-| 期待 | 実際 |
+| Expected | Actual |
 |---|---|
-| `### 第5条` が1 Parent（第1〜5項を含む） | `#### 第1項`〜`#### 第5項` が**それぞれ独立した Parent** |
-| Parent 数 21（＝条の数） | Parent 数 34 |
+| `### 第5条` (Art. 5) is one Parent containing §1–5 | `#### 第1項` to `#### 第5項` (§1–5) are **each a separate Parent** |
+| 21 Parents (one per article) | 34 Parents |
 
-Parent-Child の目的は「検索は細かい子チャンク、LLM に渡すのは文脈を含む親チャンク」だが、
-親が項単位に割れると**この設計が成立しない**。実害として「深夜帰りのタクシー代いくら？」に
-対し第2項・第4項・第5項がヒットする一方、答えが書いてある第1項が Top 4 圏外に落ちた。
+The point of Parent-Child is "search on fine-grained children, give the LLM the parent with its
+context". When parents split per clause item, **that design falls apart**. The real damage: for
+"深夜帰りのタクシー代いくら？" (late-night taxi home, how much?), items 2, 4 and 5 were hit while
+item 1, which contains the answer, fell outside the Top 4.
 
-**対処**：`.txt` で投入する。TextExtractor は分割せず1ドキュメントとして渡すため、
-指定した Delimiter と Maximum chunk length が正しく効く。
-本デモでは `scripts/provision_knowledge.py` が `#### ` 見出しのみを平文化した `.txt` を
-生成して投入している（`### ` は Delimiter として使うので残す）。
+**Fix:** upload a `.txt`. The TextExtractor passes it through as one document without splitting,
+so the specified Delimiter and Maximum chunk length take effect correctly.
+In this demo, `scripts/provision_knowledge.py` generates a `.txt` with only the `#### ` headings
+flattened and uploads it (`### ` is kept because it is used as the Delimiter).
 
-> 💡 PDF 投入なら同じ問題は起きないが、日本語PDFのテキスト抽出は別の品質問題を抱える。
-> Markdown を正としてリポジトリ管理し、投入時だけ `.txt` に変換するのが最も安全だった。
+> 💡 A PDF upload avoids this particular problem, but text extraction from Japanese PDFs has its own
+> quality issues. Keeping the Markdown as the source of truth in the repository and converting to
+> `.txt` only at upload time proved the safest.
 
-#### ⑦ Cohere rerank はレート超過時に「エラーではなく0件」を返す
+#### ⑦ Cohere rerank returns "zero results, not an error" when rate-limited
 
-Cohere のトライアルキーは概ね **10リクエスト/分**。超過すると 429 が返るが、
-Dify はこれを握り潰し、検索結果を**空配列**として返す。
+Cohere's trial key allows roughly **10 requests per minute**. Beyond that it returns 429, but
+Dify swallows it and returns the search results as **an empty array**.
 
-現れ方：
-- 単発で試すと動く。連続でテストすると突然 0 件になる。
-- Bot 側の症状は「規程に記載が見当たりませんでした」という**正常な突っぱね応答**。
-- スコア閾値の調整をしているタイミングで踏むと、「閾値が厳しすぎる」と誤診断する。
+How it shows up:
+- It works when you try once. Run tests back to back and it suddenly returns zero.
+- On the bot side the symptom is **a perfectly normal refusal**: "not found in the policy".
+- If you hit it while tuning the score threshold, you misdiagnose it as "the threshold is too strict".
 
-実際にこれで「閾値 0.01 でも 0 件」という矛盾した計測結果が出て、
-原因を閾値だと思い込んで時間を溶かした。45秒待って再実行したら 0.9986 で1件返り、
-レート制限だと判明した。
+This actually produced the contradictory measurement "zero results even at threshold 0.01", and
+time was lost assuming the threshold was the cause. Waiting 45 seconds and re-running returned one
+result at 0.9986, revealing the rate limit.
 
-**対処**：
-- バッチ計測時はリクエスト間隔を空ける（`scripts/measure_recall.py --delay`）
-- デモ撮影・クライアント提示の前には有料キーに切り替える
-- そもそも §3-3 ④ の通り、本件では Weighted Score で精度が同等なので外部Rerankを使わない
+**Fix:**
+- Space out requests when measuring in batches (`scripts/measure_recall.py --delay`)
+- Switch to a paid key before recording a demo or presenting to a client
+- Better still, as in §3-3 ④, do not use an external reranker here, since Weighted Score is just as accurate
 
-#### ⑧ LLMノードのコンテキスト変数は `{{#context#}}` のみ
+#### ⑧ The LLM node's context variable can only be `{{#context#}}`
 
-Dify がナレッジ検索結果を差し込むプレースホルダは `{{#context#}}` に固定されている
-（`graphon/nodes/llm/llm_utils.py`: `CONTEXT_PLACEHOLDER = "{{#context#}}"`）。
+The placeholder into which Dify inserts the knowledge-retrieval result is fixed as `{{#context#}}`
+(`graphon/nodes/llm/llm_utils.py`: `CONTEXT_PLACEHOLDER = "{{#context#}}"`).
 
-`{{#context.result#}}` と書いても**置換されず、その文字列がそのまま LLM に渡る**。
-LLM は `<context>{{#context.result#}}</context>` を見て「参照ナレッジが空」と解釈し、
-システムプロンプトの指示通り定型文で突っぱねる。つまり
-**「ナレッジを一切見ないが、丁寧に突っぱねるので一見正常に見える Bot」**が完成する。
+Writing `{{#context.result#}}` is **not substituted; the literal string goes to the LLM**.
+The LLM sees `<context>{{#context.result#}}</context>`, concludes the reference knowledge is empty,
+and refuses with the fixed message as the system prompt instructs. The result is
+**"a bot that never looks at the knowledge base, but refuses so politely it looks normal"**.
 
-Knowledge Retrieval ノード側の設定は `context` の `variable_selector` で指定する
-（本デモでは `kb_retrieval / result`）。
+On the Knowledge Retrieval side, the context is set via the `variable_selector` of `context`
+(`kb_retrieval / result` in this demo).
 
-#### ⑨ HTTP Request ノードの `body` は文字列であってオブジェクトではない
+#### ⑨ The HTTP Request node's `body` is a string, not an object
 
 ```python
 # graphon/nodes/http_request/node.py
@@ -1160,90 +1209,90 @@ outputs={
 }
 ```
 
-したがって `{{#n8n_webhook.body.message#}}` は解決されず、Answer ノードは
-**空文字を出力する**（エラーにはならない）。
+So `{{#n8n_webhook.body.message#}}` does not resolve, and the Answer node
+**outputs an empty string** (without an error).
 
-**対処**：HTTP Request の直後に Code ノード（python3）を置き、`json.loads` して
-必要なフィールドを個別の出力変数に展開する（§4-7 ⑤ にコード掲載）。
-Code ノードは Dify の `sandbox` コンテナ内で動くため外部通信は増えない。
+**Fix:** put a Code node (python3) right after the HTTP Request, `json.loads` the body, and expand
+the needed fields into separate output variables (code in §4-7 ⑤).
+The Code node runs in Dify's `sandbox` container, so it adds no external traffic.
 
-#### ⑩ Dify → 社内サービスの通信は squid（ssrf_proxy）経由
+#### ⑩ Traffic from Dify to internal services goes through squid (ssrf_proxy)
 
-**このセクション中で最も切り分けが難しかった項目。**
+**The hardest item in this section to diagnose.**
 
-Dify は HTTP Request ノードにソケットを直接開かせない。SSRF 対策として、
-全ての送信を `SSRF_PROXY_HTTP_URL=http://ssrf_proxy:3128` の squid 経由にしている。
-つまり `n8n_local` を名前解決する必要があるのは api / worker ではなく **squid**。
+Dify does not let the HTTP Request node open sockets directly. As an SSRF countermeasure, all
+outbound traffic goes through squid at `SSRF_PROXY_HTTP_URL=http://ssrf_proxy:3128`.
+So the container that needs to resolve `n8n_local` is **squid**, not api / worker.
 
-**なぜ気付きにくいか**：公式手順にもある疎通確認コマンドが**成功してしまう**。
+**Why it is easy to miss:** the connectivity check from the official instructions **succeeds**.
 
 ```bash
 docker exec docker-api-1 curl -s http://n8n_local:5678/healthz
-# → {"status":"ok"}   ← api は繋がっている。でも Chatflow は動かない
+# → {"status":"ok"}   ← api can connect. But the Chatflow still doesn't work
 ```
 
-Chatflow 側のエラーは `Reached maximum retries for URL http://n8n_local:5678/...` で、
-DNS ともネットワークとも書かれていない。
+The Chatflow error is `Reached maximum retries for URL http://n8n_local:5678/...`, which says
+nothing about DNS or networking.
 
-さらにネットワーク参加だけでは不十分で、2段階の対処が要る：
+Joining the network is not enough either; it takes a two-stage fix:
 
-| 段階 | 症状 | 対処 |
+| Stage | Symptom | Fix |
 |---|---|---|
-| 1 | `Reached maximum retries` | `ssrf_proxy` を `demo-rag-net` に参加させる（名前解決できるようにする） |
-| 2 | `Access to '...' was blocked by SSRF protection` | squid の ACL `http_access deny to_private_networks` に阻まれる。`SSRF_PROXY_ALLOW_PRIVATE_DOMAINS=n8n_local` で許可 |
+| 1 | `Reached maximum retries` | Add `ssrf_proxy` to `demo-rag-net` (so it can resolve the name) |
+| 2 | `Access to '...' was blocked by SSRF protection` | Blocked by squid's ACL `http_access deny to_private_networks`. Allow it with `SSRF_PROXY_ALLOW_PRIVATE_DOMAINS=n8n_local` |
 
-`SSRF_PROXY_ALLOW_PRIVATE_DOMAINS` は Dify 公式の拡張点で、
-`ssrf_proxy/docker-entrypoint.sh` が `acl ... dstdomain` の許可ルールを生成し、
-deny ルールより前に `include` する。**サブネット（`SSRF_PROXY_ALLOW_PRIVATE_IPS`）ではなく
-ホスト名1つだけを許可する**ことで、他の宛先に対する SSRF 防御は維持できる。
+`SSRF_PROXY_ALLOW_PRIVATE_DOMAINS` is an official Dify extension point:
+`ssrf_proxy/docker-entrypoint.sh` generates an `acl ... dstdomain` allow rule and `include`s it
+before the deny rule. **Allowing a single host name rather than a subnet
+(`SSRF_PROXY_ALLOW_PRIVATE_IPS`)** keeps SSRF protection in place for every other destination.
 
-生成される設定の確認：
+To check the generated configuration:
 ```bash
 docker exec docker-ssrf_proxy-1 cat /etc/squid/dify_allow_private.conf
 # acl dify_allowed_private_domains dstdomain n8n_local
 # http_access allow client_localnet dify_allowed_private_domains
 ```
 
-#### ⑪ Weaviate の全文検索（BM25）は日本語をトークナイズしない
+#### ⑪ Weaviate full-text search (BM25) does not tokenize Japanese
 
-Hybrid Search の keyword 側は Weaviate の BM25 だが、既定のトークナイザは
-空白区切りである。日本語には空白が無いため、**日本語キーワードは一切ヒットしない**。
+The keyword side of Hybrid Search is Weaviate's BM25, whose default tokenizer splits on
+whitespace. Japanese has no spaces, so **Japanese keywords never match**.
 
-実測（Full-Text Search 単体、Top K=5）：
+Measured (Full-Text Search alone, Top K=5):
 
-| クエリ | ヒット数 |
+| Query | Hits |
 |---|---|
 | `F-021` | 3 |
 | `DL-HR-RG-2024-007` | 5 |
-| `タクシー` | **0** |
+| `タクシー` (taxi) | **0** |
 
-これは欠陥ではなく、§3-1 の役割分担と一致している。BM25 に期待しているのは
-**様式番号・規程番号・英数字ファイル名**の完全一致であり、口語表現の揺れ吸収は
-Vector 側の仕事だからである。Keyword 重み `0.3` はこの前提での配分。
+This is not a defect; it matches the division of labor in §3-1. What BM25 is expected to do is
+exact-match **form numbers, policy numbers and alphanumeric file names**, while absorbing colloquial
+variation is the vector side's job. The keyword weight of `0.3` is set on that basis.
 
-ただし「Hybrid だから日本語キーワードも拾える」と誤解したまま設計すると、
-`第5条` のような日本語の条文番号での検索に期待して裏切られる。
-日本語の形態素解析が必要な要件では、Weaviate 側で `tokenization: kagome_ja` を設定するか、
-Elasticsearch（kuromoji）をベクトルストアに選ぶ必要がある。
+But if you design under the misconception that "it's hybrid, so Japanese keywords will match too",
+you will be let down when you expect searches on Japanese article numbers like `第5条` to work.
+For requirements that need Japanese morphological analysis, set `tokenization: kagome_ja` in
+Weaviate, or choose Elasticsearch (kuromoji) as the vector store.
 
-#### ⑫ Dify のクローンを2箇所に作ると compose プロジェクトが衝突する
+#### ⑫ Two Dify clones make compose projects collide
 
-Docker Compose のプロジェクト名は、既定で**カレントディレクトリ名**から決まる。
-Dify のリポジトリは compose ファイルが `docker/` 配下にあるため、
-どこにクローンしても **プロジェクト名は一律 `docker`** になる。
+Docker Compose derives the project name from **the current directory name** by default.
+Dify's compose files live under `docker/`, so wherever you clone it,
+**the project name is always `docker`**.
 
-つまり Dify を2箇所にクローンすると：
+So if you clone Dify in two places:
 
-- `~/dify-local/docker` と `~/Desktop/dify-local/docker` の**どちらから叩いても同じコンテナ群**を操作する
-- ただし読み込まれる compose ファイル・`.env`・bind mount されるテンプレート類は
-  **叩いたディレクトリ側のもの**になる
+- Running commands from either `~/dify-local/docker` or `~/Desktop/dify-local/docker` **controls the same set of containers**
+- But the compose files, `.env` and bind-mounted templates that get read are
+  **the ones in the directory you ran the command from**
 
-**症状**：一方のディレクトリで override を修正して `docker compose up -d` し、
-問題が解決したように見えたあと、別のディレクトリから `docker compose up -d` した瞬間に
-設定が元に戻る。しかもコンテナ名も起動状態も変わらないため、何が起きたか分かりにくい。
-2つのクローンの Dify バージョンが違えば、イメージのバージョンも入れ替わりうる。
+**Symptom:** you fix the override in one directory, run `docker compose up -d`, and the problem
+seems solved; the moment someone runs `docker compose up -d` from the other directory, the setting
+reverts. Container names and states do not change, so it is hard to tell what happened. If the two
+clones are on different Dify versions, the image versions can swap too.
 
-**現在どこから起動されているかの確認**：
+**To check where it is currently running from:**
 
 ```bash
 docker inspect docker-api-1 \
@@ -1251,74 +1300,74 @@ docker inspect docker-api-1 \
 # → /Users/xxx/Desktop/dify-local/docker
 ```
 
-`volumes/db/data`（PostgreSQL）と `volumes/weaviate` は bind mount なので、
-**実データは上記ディレクトリ配下にある**。統合するならこちらを残すこと。
+`volumes/db/data` (PostgreSQL) and `volumes/weaviate` are bind mounts, so
+**the real data lives under that directory**. If you consolidate, keep that one.
 
-**対処**：
-- クローンは1箇所だけにする（推奨）
-- どうしても複数必要なら、各 `.env` に `COMPOSE_PROJECT_NAME=dify-demo` のように
-  明示的な名前を設定して衝突を避ける
+**Fix:**
+- Clone in one place only (recommended)
+- If you really need several, set an explicit name such as `COMPOSE_PROJECT_NAME=dify-demo`
+  in each `.env` to avoid collisions
 
 ---
 
-## 5. 拡張ロードマップ（クライアントへの提案フック）
+## 5. Extension roadmap (proposal hooks for clients)
 
-| 段階 | 拡張内容 | 工数感（技術的観点） |
+| Stage | Extension | Effort (technical view) |
 |---|---|---|
-| Phase 1（本デモ） | 規程Q&A + テンプレート配布 | Dify×1 + n8n×1ワークフロー |
-| Phase 2 | 交通費の写真OCR → 自動入力（Vision API + n8n） | Vision LLM + Excel書込ノード追加 |
-| Phase 3 | 申請承認フロー連携（Slack承認ボタン → ワークフローシステム自動更新） | n8n Slack interactive + Coconala-Flow API |
-| Phase 4 | 規程改訂版の自動取り込み（Driveに新版PDFアップ → Embedding再生成） | Drive Trigger + Dify Knowledge API |
-| Phase 5 | 多言語対応（英語・ベトナム語）：技能実習生向け | 規程の自動翻訳パイプライン＋言語別Chatflow |
+| Phase 1 (this demo) | Policy Q&A + template distribution | 1 Dify app + n8n workflows |
+| Phase 2 | OCR on receipt photos → automatic entry (Vision API + n8n) | Add a vision LLM + an Excel-write node |
+| Phase 3 | Approval-flow integration (Slack approval button → automatic update of the workflow system) | n8n Slack interactive + Coconala-Flow API |
+| Phase 4 | Automatic ingestion of revised policies (new PDF uploaded to Drive → re-embedding) | Drive Trigger + Dify Knowledge API |
+| Phase 5 | Multilingual support (English, Vietnamese) for technical intern trainees | Automatic policy translation pipeline + per-language Chatflows |
 
 ---
 
-## 6. デモ動画のシナリオ（撮影台本 v2・ショート版）
+## 6. Demo video scenario (shooting script v2, short version)
 
-> **v2 の方針**：v1 は3分・ナレーション前提でしたが、ココナラ／Upwork の一覧画面では
-> 冒頭数秒で離脱が決まります。v2 では **60秒・ナレーションなし・字幕（日英併記）** に変更し、
-> 課題提示を捨てて**いきなり画面が動くところから始めます**。
-> 日英字幕にすることで、国内向けと海外向けで動画を作り分ける必要がなくなります。
+> **Approach for v2:** v1 was three minutes with narration, but on Coconala / Upwork listing pages
+> viewers decide to leave within the first few seconds. v2 is **60 seconds, no narration, bilingual
+> (Japanese/English) captions**, drops the problem statement and **opens with the screen already moving**.
+> Bilingual captions mean there is no need to produce separate videos for domestic and overseas audiences.
 
-### 尺の設計根拠（実測値）
+### Basis for the timing (measured)
 
-台本の秒数は推測ではなく、実機で計測した応答時間に合わせています。
+The timings in the script are not guesses; they match response times measured on the live system.
 
-| 操作 | 総時間 | 最初の文字が出るまで | 出力量 |
+| Action | Total time | Time to first character | Output size |
 |---|---|---|---|
-| ファイル要求 | **1.7秒** | 1.6秒 | 237文字 |
-| ガードレール（突っぱね） | 4.6秒 | 3.9秒 | 131文字 |
-| 規程Q&A | 7.3秒 | **4.5秒** | 322文字・10行 |
+| File request | **1.7 s** | 1.6 s | 237 characters |
+| Guardrail (refusal) | 4.6 s | 3.9 s | 131 characters |
+| Policy Q&A | 7.3 s | **4.5 s** | 322 characters, 10 lines |
 
-ここから2つの判断が出ます。
+Two decisions follow from this.
 
-1. **冒頭はファイル要求にする。** LLM生成を伴わないため最速（1.7秒）で、しかも
-   「チャットに話しかけたらExcelが落ちてくる」という一番意外性のある絵が撮れます。
-   規程Q&Aを冒頭に置くと、**4.5秒の無音の待ち時間**が発生して離脱します。
-2. **規程Q&Aの待ち時間は編集で詰める。** 送信からテキスト表示開始までの約4.5秒は、
-   ジャンプカットするか 3〜4倍速で早送りします（早送りする場合は右上に `×4` と小さく出す）。
+1. **Open with the file request.** It involves no LLM generation, so it is the fastest (1.7 s), and it
+   gives the most surprising shot: "talk to the chat and an Excel file drops out".
+   Opening with policy Q&A creates **4.5 seconds of silent waiting** and viewers leave.
+2. **Cut the policy Q&A wait in editing.** The roughly 4.5 seconds from sending to text appearing is
+   either jump-cut or fast-forwarded at 3–4× (if fast-forwarded, show a small `×4` in the top-right corner).
 
-### ショットリスト（合計60秒）
+### Shot list (60 seconds total)
 
-| # | 時間 | 画面 | 操作・演出 |
+| # | Time | Screen | Action / direction |
 |---|---|---|---|
-| 1 | 0:00-0:08 | Dify チャット画面（全画面） | **コールドオープン。** 説明なしで「経費精算のフォーマットちょうだい」とタイプ→送信。1.7秒で回答＋URLが表示。すかさずURLをクリック→Excelがダウンロード→開く（5シートのタブが見える） |
-| 2 | 0:08-0:14 | ダウンロードURLをズーム | `http://localhost:5678/...` の **localhost** 部分を丸で囲む／ハイライト。ここが本編の主張 |
-| 3 | 0:14-0:30 | Dify チャット画面 | 「深夜帰りのタクシー代いくら？」→ **待ち時間はカット** → 【結論】【詳細・補足】【引用元】の構造化回答が出る。`15,000円` と `第5条` に下線アニメーション |
-| 4 | 0:30-0:40 | Dify チャット画面 | 「猫を飼ったら手当出る？」→ 突っぱね回答。「総務部の佐藤（内線1234）」を強調 |
-| 5 | 0:40-0:50 | 画面分割（左:Dify／右:n8n Executions） | ショット1をリプレイしつつ、右で n8n の実行ログがリアルタイムに増える様子。任意で `docker ps` の一覧を数秒 |
-| 6 | 0:50-1:00 | 構成図（静止画）＋CTA | §4-7 のアーキテクチャ図。CTA（ココナラ／Upwork） |
+| 1 | 0:00-0:08 | Dify chat screen (full screen) | **Cold open.** With no explanation, type "経費精算のフォーマットちょうだい" (send me the expense format) → send. The answer and URL appear in 1.7 s. Immediately click the URL → the Excel file downloads → open it (the five sheet tabs are visible) |
+| 2 | 0:08-0:14 | Zoom on the download URL | Circle / highlight the **localhost** in `http://localhost:5678/...`. This is the video's main claim |
+| 3 | 0:14-0:30 | Dify chat screen | "深夜帰りのタクシー代いくら？" (late-night taxi home, how much?) → **cut the wait** → the structured answer with Conclusion / Details / Source appears. Underline animation on `15,000円` and `第5条` (Art. 5) |
+| 4 | 0:30-0:40 | Dify chat screen | "猫を飼ったら手当出る？" (allowance for adopting a cat?) → refusal. Emphasize "Sato in General Affairs (ext. 1234)" |
+| 5 | 0:40-0:50 | Split screen (left: Dify / right: n8n Executions) | Replay shot 1 while n8n's execution log grows in real time on the right. Optionally a few seconds of the `docker ps` list |
+| 6 | 0:50-1:00 | Architecture diagram (still) + CTA | The §4-7 architecture diagram. CTA (Coconala / Upwork) |
 
-### 字幕（日英併記）
+### Captions (Japanese and English)
 
-- **配置**：画面下部中央。1行目に日本語、2行目に英語。
-- **サイズ比**：英語は日本語の 75〜80%、やや薄い色（例：日本語 `#FFFFFF` ／ 英語 `#C8C8C8`）。
-  「日本語が主・英語が従」と一目で分かる関係にすると、日本語話者が英語を読み飛ばせます。
-- **背景**：半透明の黒帯（不透明度 60〜70%）。Dify の回答本文と重ならない高さに置くこと。
-- **文字数**：1行あたり日本語20字／英語40字を超えないこと。超える場合は分割します。
-- そのまま読み込める字幕ファイルを [`demo/demo_captions.srt`](../demo/demo_captions.srt) に用意してあります。
+- **Placement:** bottom center. Japanese on line 1, English on line 2.
+- **Size ratio:** English at 75–80% of the Japanese size, in a slightly lighter color (e.g. Japanese `#FFFFFF` / English `#C8C8C8`).
+  Making "Japanese primary, English secondary" obvious at a glance lets Japanese speakers skip the English.
+- **Background:** semi-transparent black band (60–70% opacity). Place it so it does not overlap Dify's answer text.
+- **Length:** no more than 20 Japanese characters / 40 English characters per line. Split longer lines.
+- A ready-to-import caption file is provided at [`demo/demo_captions.srt`](./demo/demo_captions.srt).
 
-| # | 時間 | 日本語 | English |
+| # | Time | Japanese | English |
 |---|---|---|---|
 | 1 | 0:01-0:05 | 社内チャットに話しかけるだけ | Just ask, in plain Japanese |
 | 2 | 0:05-0:08 | 経費精算テンプレートが届く | The expense template arrives |
@@ -1331,77 +1380,77 @@ docker inspect docker-api-1 \
 | 9 | 0:50-0:56 | 社内問い合わせを自動化。貴社サーバー内で完結 | Automate internal Q&A. Entirely on-premise |
 | 10 | 0:56-1:00 | ご相談ください | Let's talk |
 
-### 撮影前チェックリスト
+### Pre-recording checklist
 
 ```bash
-python3 scripts/test_e2e.py     # 3/3 PASS を確認してから撮る
+python3 scripts/test_e2e.py     # confirm 3/3 PASS before recording
 ```
 
-- [ ] `test_e2e.py` が 3/3 PASS
-- [ ] ブラウザを**新規プロファイル**で開く（ブックマークバー・他タブ・拡張機能を映さない）
-- [ ] ダウンロードフォルダを空にしておく（過去のファイルが映り込まない）
-- [ ] macOS のデスクトップ通知をオフ（集中モード）
-- [ ] メニューバーの時計・Wi-Fi以外のアイコンを隠す
-- [ ] 画面収録は 1920×1080 / 60fps
-- [ ] ブラウザのズームを 125〜150% に（字幕を入れても本文が読める大きさ）
-- [ ] n8n の Executions 画面は事前に開いて、古い実行履歴を消しておく
+- [ ] `test_e2e.py` reports 3/3 PASS
+- [ ] Open the browser with a **fresh profile** (no bookmarks bar, other tabs or extensions on screen)
+- [ ] Empty the Downloads folder (so old files do not show up)
+- [ ] Turn off macOS desktop notifications (Focus mode)
+- [ ] Hide menu-bar icons other than the clock and Wi-Fi
+- [ ] Record the screen at 1920×1080 / 60 fps
+- [ ] Set browser zoom to 125–150% (large enough to read the text even with captions)
+- [ ] Open the n8n Executions screen in advance and clear old execution history
 
-### 編集メモ
+### Editing notes
 
-- **無音を作らない。** ショット3の待ち時間のように「何も起きない秒数」は必ずカットします。
-- **BGMは控えめに、または無し。** 業務用途の提案動画なので、派手なBGMは信頼感を削ぎます。
-- **1カットに1メッセージ。** 字幕を詰め込みたくなりますが、上の表以上には増やさないこと。
-- **ショット2が本編の主張です。** ここだけは 0.5秒ほど長めに、静止気味に見せます。
-  経営者が反応するのは精度の話ではなく「データが外に出ない」という一点です。
+- **Leave no silence.** Always cut "seconds where nothing happens", like the wait in shot 3.
+- **Keep background music subtle, or use none.** This is a business proposal video; flashy music undermines trust.
+- **One message per cut.** It is tempting to pack in captions, but do not add more than the table above.
+- **Shot 2 is the main claim.** Hold it about 0.5 seconds longer, almost as a still.
+  What owners react to is not accuracy but one thing: "the data doesn't leave".
 
 ---
 
-## 7. 納品物チェックリスト（クライアント引渡し時）
+## 7. Deliverables checklist (at client handover)
 
-### 共通（全構成）
-- [x] Dify Chatflow DSL（YAMLエクスポート）→ `dify/chatflow_dsl.yaml`（secret除外済み）
-- [x] ナレッジ用の規程原本 → `01_dummy_manual_demo_logistics.md`（投入時に `.txt` へ変換、§4-8 ⑥）
-- [x] n8n ワークフロー（JSONエクスポート）→ `docker/n8n/workflows/`（Workflow 1 / 2 両方、PII除去済み）
-- [x] 環境変数一覧 → `scripts/.dify_admin.env.example`
-- [x] 運用マニュアル → `03_operations_manual.md`（再Embedding／xlsx更新／バックアップ／一次切り分け）
-- [x] テストクエリ集とRecall@4測定結果 → `scripts/measure_recall.py`（§3-4 に実測値）
-- [x] Postman / curl サンプルコレクション → `04_api_examples.md`（全コマンド実機検証済み）
+### Common (all setups)
+- [x] Dify Chatflow DSL (YAML export) → `dify/chatflow_dsl.yaml` (secrets excluded)
+- [x] Source policy for the knowledge base → `01_dummy_manual_demo_logistics.md` (converted to `.txt` at upload, §4-8 ⑥)
+- [x] n8n workflows (JSON export) → `docker/n8n/workflows/` (both Workflow 1 and 2, PII removed)
+- [x] Environment variable list → `scripts/.dify_admin.env.example`
+- [x] Operations manual → `03_operations_manual.md` (re-embedding / xlsx update / backup / first-line triage)
+- [x] Test queries and Recall@4 results → `scripts/measure_recall.py` (measured values in §3-4)
+- [x] Postman / curl sample collection → `04_api_examples.md` (every command verified on the live system)
 
-### 構築自動化スクリプト（v1.5 で追加）
+### Build automation scripts (added in v1.5)
 
-管理画面のGUI操作を介さず、API経由で環境を再構築できる。クライアント環境への再現配備、
-および規程改訂時の作り直しがコマンド1本で済む。
+The environment can be rebuilt through the API without touching the admin GUI. Reproducing it in a
+client environment, and rebuilding when the policy is revised, each take a single command.
 
-| ファイル | 役割 |
+| File | Role |
 |---|---|
-| `scripts/dify_console.py` | Dify Console API クライアント（Python標準ライブラリのみ、pip install 不要） |
-| `scripts/provision_knowledge.py` | §3-3 のナレッジ構築。`--recreate` で再構築 |
-| `scripts/provision_chatflow.py` | §2 の Chatflow 構築。DSL生成→import→publish→export |
-| `scripts/measure_recall.py` | §3-4 の Recall@4 実測 |
-| `scripts/test_e2e.py` | §5 相当のE2Eテスト（規程Q&A／ガードレール／ファイル要求） |
-| `scripts/export_n8n_workflows.py` | n8n ワークフローのエクスポート（`shared` 内の所有者メールアドレスを除去） |
+| `scripts/dify_console.py` | Dify Console API client (Python standard library only, no pip install) |
+| `scripts/provision_knowledge.py` | Builds the §3-3 knowledge base. `--recreate` rebuilds it |
+| `scripts/provision_chatflow.py` | Builds the §2 Chatflow. DSL generation → import → publish → export |
+| `scripts/measure_recall.py` | Measures the §3-4 Recall@4 |
+| `scripts/test_e2e.py` | End-to-end tests (policy Q&A / guardrail / file request) |
+| `scripts/export_n8n_workflows.py` | Exports n8n workflows (strips the owner's e-mail address from `shared`) |
 
 ```bash
-cp scripts/.dify_admin.env.example scripts/.dify_admin.env   # DIFY_PASSWORD を記入
+cp scripts/.dify_admin.env.example scripts/.dify_admin.env   # fill in DIFY_PASSWORD
 python3 scripts/provision_knowledge.py
 python3 scripts/provision_chatflow.py
 python3 scripts/measure_recall.py --threshold 0.3
 python3 scripts/test_e2e.py
 ```
 
-### §4-7 完全ローカル構成（中小企業向け本命）
-- [ ] `docker/n8n/docker-compose.yml`（templates volume + allowlist パス + 共有 network 参加済み）
-- [ ] `docker/dify/docker-compose.override.yaml`（Dify公式に重ねる差分）
-- [ ] `docker/templates/expense_template_v3.xlsx`（拡張属性除去済み）
-- [ ] `docker/test/test_webhook.sh`（curl疎通テスト集）
-- [ ] `docker/README.md`（`git clone` → `docker compose up -d` 一発で動く手順書）
-- [ ] **§4-8 運用ノウハウ**（n8n allowlist / Webhook Respond モード / macOS xattr / RFC 5987）の説明書
+### §4-7 fully local setup (the primary SME pattern)
+- [x] `docker/n8n/docker-compose.yml` (templates volume + allowlisted path + joins the shared network)
+- [x] `docker/dify/docker-compose.override.yaml` (overlay on the official Dify compose)
+- [x] `docker/n8n/templates/expense_template_v3.xlsx` (extended attributes removed; placed at setup)
+- [x] `docker/test/test_webhook.sh` (curl connectivity tests)
+- [x] `docker/README.md` (instructions that work with `git clone` → `docker compose up -d`)
+- [x] **§4-8 operational lessons** (n8n allowlist / Webhook Respond mode / macOS xattr / RFC 5987)
 
-### §4-1 / §4-6（クラウドAPI連携版）採用時の追加納品物
-- [ ] Slack App マニフェスト（YAML）
-- [ ] Google Drive サービスアカウント JSON（クライアント取得分）
-- [ ] ngrok / Cloudflare Tunnel の構成手順（Dify Cloud + n8n ローカル時）
+### Additional deliverables when adopting §4-1 / §4-6 (cloud-API variants)
+- [ ] Slack App manifest (YAML)
+- [ ] Google Drive service account JSON (obtained by the client)
+- [ ] ngrok / Cloudflare Tunnel setup instructions (for Dify Cloud + local n8n)
 
 ---
 
-（以上）
+(End of document)
