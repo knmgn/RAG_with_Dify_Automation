@@ -8,7 +8,8 @@ Flow:
   question (mention or DM) → Dify Service API → threaded answer with sources
   └ guardrail fired (fixed refusal) → escalation card in the owner channel
       ├ "Reply in thread" → modal → the owner's answer is posted in the
-      │                      employee's thread, labelled as human-written
+      │                      employee's thread under the owner's own name and
+      │                      profile photo, labelled as human-written
       └ "Mark resolved"   → card closed without a reply
 """
 
@@ -155,13 +156,23 @@ class Bridge:
 
         escalation = self.store.get_escalation(escalation_id)
         assert escalation is not None
+        message = {
+            "channel": escalation.channel,
+            "thread_ts": escalation.thread_ts,
+            "text": text[:3000],
+            "blocks": human_answer_blocks(owner, text, self.lang),
+        }
+        identity = self._owner_identity(client, owner)
         try:
-            client.chat_postMessage(
-                channel=escalation.channel,
-                thread_ts=escalation.thread_ts,
-                text=text[:3000],
-                blocks=human_answer_blocks(owner, text, self.lang),
-            )
+            try:
+                client.chat_postMessage(**message, **identity)
+            except Exception:
+                if not identity:
+                    raise
+                # e.g. chat:write.customize not granted yet: post under the bot's
+                # own name instead. The header and note still say who wrote it.
+                log.warning("posting as %s failed; falling back to the bot identity", owner, exc_info=True)
+                client.chat_postMessage(**message)
         except Exception:
             # Give the claim back so the card's buttons keep working.
             self.store.reopen_escalation(escalation_id)
@@ -194,6 +205,30 @@ class Bridge:
                 status_line=status_line,
             ),
         )
+
+    @staticmethod
+    def _owner_identity(client: Any, owner: str) -> dict[str, str]:
+        """The owner's Slack name and profile photo, to post their answer under.
+
+        AI answers show the bot's icon; human answers show the person's face, so
+        the thread itself makes clear which is which. Slack still marks the
+        message with an APP badge, so it cannot pass for a message the owner
+        typed directly. Returns {} if the profile cannot be read (users:read
+        missing, deactivated user), in which case the bot identity is used.
+        """
+        try:
+            profile = client.users_info(user=owner)["user"]["profile"]
+        except Exception:
+            log.warning("could not read profile of %s", owner, exc_info=True)
+            return {}
+        name = (profile.get("display_name") or profile.get("real_name") or "").strip()
+        icon = profile.get("image_192") or profile.get("image_72") or ""
+        identity: dict[str, str] = {}
+        if name:
+            identity["username"] = name
+        if icon:
+            identity["icon_url"] = icon
+        return identity
 
     @staticmethod
     def _tell(client: Any, body: dict[str, Any], text: str) -> None:

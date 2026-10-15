@@ -58,6 +58,10 @@ class FakeSlack:
                 return {"ok": True, "channel": kwargs["channel"], "ts": f"{self._ts}.000"}
             if method == "chat_getPermalink":
                 return {"ok": True, "permalink": "https://slack.example/archives/C1/p1"}
+            if method == "users_info":
+                return {"ok": True, "user": {"id": kwargs["user"], "profile": {
+                    "display_name": "佐藤 健一", "real_name": "Kenichi Sato",
+                    "image_192": "https://avatars.slack.example/sato_192.png"}}}
             return {"ok": True}
 
         return call
@@ -233,6 +237,65 @@ class EscalationTests(unittest.TestCase):
         self.assertEqual(update["channel"], "C_OWNERS")
         self.assertFalse([b for b in update["blocks"] if b["type"] == "actions"])
         self.assertIn("回答しました", all_text(update["blocks"]))
+
+    def answer(self, bridge: Bridge, slack: FakeSlack, owner: str = "U_SATO") -> None:
+        view = {"private_metadata": self.card_id(slack),
+                "state": {"values": {"answer": {"text": {"value": "ペット手当の制度はありません。"}}}}}
+        bridge.submit_reply({"user": {"id": owner}}, view, slack, lambda **kw: None)
+
+    def test_owner_reply_uses_owner_name_and_photo(self) -> None:
+        slack = FakeSlack()
+        bridge = self.refuse(slack)
+        self.answer(bridge, slack)
+        human = slack.posts("C1")[-1]
+        self.assertEqual(human["username"], "佐藤 健一")
+        self.assertEqual(human["icon_url"], "https://avatars.slack.example/sato_192.png")
+        # The bot's own answers keep the bot identity.
+        self.assertNotIn("username", slack.posts("C1")[0])
+
+    def test_falls_back_to_real_name_without_display_name(self) -> None:
+        class NoDisplayName(FakeSlack):
+            def __getattr__(self, method: str):
+                if method != "users_info":
+                    return super().__getattr__(method)
+                return lambda **kw: {"ok": True, "user": {"profile": {"display_name": "", "real_name": "Kenichi Sato"}}}
+
+        slack = NoDisplayName()
+        bridge = self.refuse(slack)
+        self.answer(bridge, slack)
+        human = slack.posts("C1")[-1]
+        self.assertEqual(human["username"], "Kenichi Sato")
+        self.assertNotIn("icon_url", human)
+
+    def test_unreadable_profile_posts_as_bot(self) -> None:
+        slack = FakeSlack(fail={"users_info"})
+        bridge = self.refuse(slack)
+        self.answer(bridge, slack)
+        human = slack.posts("C1")[-1]
+        self.assertNotIn("username", human)
+        self.assertIn("AIによる生成ではありません", all_text(human["blocks"]))
+        self.assertEqual(bridge.store.get_escalation(self.card_id(slack)).status, "answered")
+
+    def test_rejected_customization_retries_as_bot(self) -> None:
+        class RejectCustomization(FakeSlack):
+            def __getattr__(self, method: str):
+                inner = super().__getattr__(method)
+
+                def call(**kwargs: Any) -> dict[str, Any]:
+                    if method == "chat_postMessage" and "username" in kwargs:
+                        self.calls.append((method, kwargs))
+                        raise RuntimeError("missing_scope: chat:write.customize")
+                    return inner(**kwargs)
+
+                return call
+
+        slack = RejectCustomization()
+        bridge = self.refuse(slack)
+        self.answer(bridge, slack)
+        attempts = [k for m, k in slack.calls if m == "chat_postMessage" and k["channel"] == "C1"][1:]
+        self.assertEqual(["username" in k for k in attempts], [True, False])
+        self.assertEqual(bridge.store.get_escalation(self.card_id(slack)).status, "answered")
+        self.assertIn("chat_update", slack.methods())
 
     def test_empty_reply_is_rejected_in_modal(self) -> None:
         slack = FakeSlack()

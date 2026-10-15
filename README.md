@@ -46,7 +46,7 @@ prompt-tuning afterthoughts:
 | Retrieval **Recall@4** on the 10 design-doc test queries | **10/10 = 100%** | `python3 scripts/measure_recall.py --threshold 0.3` |
 | End-to-end tests (policy Q&A, refusal, file delivery via n8n) | **3/3 pass** | `python3 scripts/test_e2e.py` |
 | n8n connectivity chain (host → n8n, Dify → n8n, WF1, WF2) | **4/4 pass** | `./docker/test/test_webhook.sh` |
-| Slack bridge unit tests (question flow, escalation lifecycle, Dify client) | **25/25 pass** | `cd slack_bridge && python3 -m unittest discover -s tests` |
+| Slack bridge unit tests (question flow, escalation lifecycle, Dify client) | **29/29 pass** | `cd slack_bridge && python3 -m unittest discover -s tests` |
 | Top retrieval score, in-scope vs. out-of-scope queries | `0.36–0.64` vs. `0.21–0.38` | `python3 scripts/measure_recall.py` |
 
 The last row matters. The two score ranges **overlap**, so a score threshold alone can never be an
@@ -152,8 +152,9 @@ The Dify Web App remains available as a second channel.
 ### 🤝 Human-in-the-Loop (HITL) Workflow Integration
 - **Slack escalation loop** ([`slack_bridge/`](./slack_bridge/)): when the guardrail refuses, the
   bridge posts an escalation card to the policy owners' channel. **Reply in thread** opens a modal,
-  and the owner's answer is posted in the employee's thread under the owner's name, labelled as
-  human-written. **Mark resolved** closes the card without a reply. The first owner to act claims the
+  and the owner's answer is posted in the employee's thread **under the owner's own Slack name and
+  profile photo**, labelled as human-written. AI answers keep the bot icon, so anyone reading the
+  thread can tell which answers came from the model and which from a person. **Mark resolved** closes the card without a reply. The first owner to act claims the
   card, so two people never answer the same question.
 - **Honest hand-off:** the employee is told "a person will reply here" only if the card was actually
   posted. If escalation is off or fails, they still get the fixed refusal with the owner's contact

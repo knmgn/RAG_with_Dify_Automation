@@ -17,8 +17,10 @@ oauth_config:
     bot:
       - app_mentions:read   # questions asked with @Demo-Logi-Bot in channels
       - chat:write          # answers, escalation cards, human replies
+      - chat:write.customize  # post an owner's reply under their name and photo
       - im:history          # questions asked in a direct message
       - reactions:write     # the ⏳ "working on it" reaction
+      - users:read          # look up the replying owner's name and photo
 settings:
   event_subscriptions:
     bot_events:

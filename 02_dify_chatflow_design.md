@@ -1318,7 +1318,8 @@ different route that fits §4-7 better:
   port is exposed. It runs as a container on `demo-rag-net` and calls the Dify Service API directly.
 - **One thread = one conversation:** follow-ups in a Slack thread reuse the Dify `conversation_id`.
 - **Human escalation:** when the fixed refusal (§1-2) is detected, an escalation card goes to the
-  owners' channel. The owner's reply is posted in the employee's thread, labelled human-written.
+  owners' channel. The owner's reply is posted in the employee's thread under the owner's Slack name
+  and profile photo (AI answers keep the bot icon), labelled human-written.
 - No change to the Chatflow is required. The file-request path keeps going through n8n (§4-7).
 
 ---
