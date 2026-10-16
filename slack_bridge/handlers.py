@@ -16,6 +16,7 @@ Flow:
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from typing import Any, Callable
 
@@ -34,6 +35,21 @@ from store import ConversationStore, Escalation
 log = logging.getLogger(__name__)
 
 WORKING_REACTION = "hourglass_flowing_sand"
+
+# Thread replies that close the conversation rather than ask something. Without
+# an @-mention they get no answer, so "Thanks!" does not become a refusal and an
+# escalation card.
+_ACKNOWLEDGEMENTS = re.compile(
+    r"(thanks?( you)?( so much| a lot)?|thx|ty|ok(ay)?|got it|great|perfect|cool|nice|understood|noted"
+    r"|ありがとう(ございます)?|了解(です|しました)?|承知(しました)?|わかりました)"
+    r"(:[a-z0-9_+-]+:|[\s!.。！])*",
+    re.IGNORECASE,
+)
+
+
+def is_acknowledgement(text: str) -> bool:
+    text = text.strip()
+    return not text or bool(_ACKNOWLEDGEMENTS.fullmatch(text)) or bool(re.fullmatch(r"(:[a-z0-9_+-]+:\s*)+", text))
 
 
 class Bridge:
@@ -64,6 +80,25 @@ class Bridge:
             self._answer(client, channel, thread_ts, user, question)
         finally:
             self._react(client, "reactions_remove", channel, event["ts"])
+
+    def handle_thread_message(self, event: dict[str, Any], client: Any, bot_user_id: str | None) -> None:
+        """A plain channel message: answer it only as a follow-up in a thread the bot is already in."""
+        thread_ts = event.get("thread_ts")
+        if not thread_ts or thread_ts == event.get("ts"):
+            return
+        # A message that mentions the bot also arrives as app_mention; answer it once.
+        if bot_user_id and f"<@{bot_user_id}>" in event.get("text", ""):
+            return
+        channel = event.get("channel", "")
+        if self.store.get(channel, thread_ts) is None:
+            return
+        # Once a thread is handed to a person, the bot stays quiet unless mentioned,
+        # so "thanks" to the owner (or the owner typing in the thread) gets no AI reply.
+        if self.store.thread_escalated(channel, thread_ts):
+            return
+        if is_acknowledgement(event.get("text", "")):
+            return
+        self.handle_question(event, client)
 
     def _answer(self, client: Any, channel: str, thread_ts: str, user: str, question: str) -> None:
         try:

@@ -163,6 +163,57 @@ class QuestionTests(unittest.TestCase):
         self.assertEqual(len(slack.posts()), 1)
 
 
+def thread_message(text: str, ts: str = "2.000", thread_ts: str | None = "1.000") -> dict[str, Any]:
+    event = {"type": "message", "channel_type": "channel", "channel": "C1", "user": "U_EMP", "text": text, "ts": ts}
+    if thread_ts:
+        event["thread_ts"] = thread_ts
+    return event
+
+
+class ThreadFollowUpTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.dify = FakeDify([DifyAnswer(RIDE_ANSWER, "conv-1"), DifyAnswer("**Answer**\nYes, keep the receipt.", "conv-1")])
+        self.bridge = make_bridge(self.dify)
+        self.bridge.handle_question(mention("<@UBOT> How much for a late-night ride?", ts="1.000"), FakeSlack())
+
+    def test_plain_reply_in_bot_thread_is_a_follow_up(self) -> None:
+        slack = FakeSlack()
+        self.bridge.handle_thread_message(thread_message("Do I need a receipt for that?"), slack, "UBOT")
+        self.assertEqual(self.dify.requests[1]["conversation_id"], "conv-1")
+        self.assertEqual(slack.posts()[0]["thread_ts"], "1.000")
+
+    def test_reply_that_mentions_the_bot_is_left_to_app_mention(self) -> None:
+        self.bridge.handle_thread_message(thread_message("<@UBOT> receipt?"), FakeSlack(), "UBOT")
+        self.assertEqual(len(self.dify.requests), 1)
+
+    def test_other_channel_messages_are_ignored(self) -> None:
+        slack = FakeSlack()
+        self.bridge.handle_thread_message(thread_message("lunch?", ts="5.000", thread_ts=None), slack, "UBOT")
+        self.bridge.handle_thread_message(thread_message("unrelated", thread_ts="9.000"), slack, "UBOT")
+        self.assertEqual(slack.calls, [])
+        self.assertEqual(len(self.dify.requests), 1)
+
+    def test_acknowledgements_get_no_answer(self) -> None:
+        slack = FakeSlack()
+        for text in ("Thanks!", "thank you so much", "ok", "Got it.", ":+1:", "ありがとうございます！", "了解です"):
+            self.bridge.handle_thread_message(thread_message(text), slack, "UBOT")
+        self.assertEqual(slack.calls, [])
+        self.assertEqual(len(self.dify.requests), 1)
+
+    def test_question_that_starts_with_thanks_is_answered(self) -> None:
+        self.bridge.handle_thread_message(thread_message("Thanks! Do I need a receipt?"), FakeSlack(), "UBOT")
+        self.assertEqual(len(self.dify.requests), 2)
+
+    def test_escalated_thread_is_left_to_the_human(self) -> None:
+        dify = FakeDify([DifyAnswer(REFUSAL, "conv-9")])
+        bridge = make_bridge(dify)
+        bridge.handle_question(mention("<@UBOT> Do I get a pet allowance?", ts="1.000"), FakeSlack())
+        slack = FakeSlack()
+        bridge.handle_thread_message(thread_message("Thanks!"), slack, "UBOT")
+        self.assertEqual(slack.calls, [])
+        self.assertEqual(len(dify.requests), 1)
+
+
 class EscalationTests(unittest.TestCase):
     def refuse(self, slack: FakeSlack, **env: str) -> Bridge:
         # Retrieved chunks on a refusal must not be shown as sources.

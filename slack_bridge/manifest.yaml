@@ -18,8 +18,10 @@ oauth_config:
   scopes:
     bot:
       - app_mentions:read   # questions asked with @nexuslogi-bot in channels
+      - channels:history    # follow-ups in the bot's threads without an @-mention (public channels)
       - chat:write          # answers, escalation cards, human replies
       - chat:write.customize  # post an owner's reply under their name and photo
+      - groups:history      # the same in private channels
       - im:history          # questions asked in a direct message
       - reactions:write     # the ⏳ "working on it" reaction
       - users:read          # look up the replying owner's name and photo
@@ -27,6 +29,8 @@ settings:
   event_subscriptions:
     bot_events:
       - app_mention
+      - message.channels
+      - message.groups
       - message.im
   interactivity:
     is_enabled: true        # "Reply in thread" / "Mark resolved" buttons and the reply modal

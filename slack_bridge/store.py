@@ -109,6 +109,14 @@ class ConversationStore:
             self._db.execute("UPDATE escalations SET status = 'open', handled_by = '' WHERE id = ?", (id,))
             self._db.commit()
 
+    def thread_escalated(self, channel: str, thread_ts: str) -> bool:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT 1 FROM escalations WHERE channel = ? AND thread_ts = ? LIMIT 1",
+                (channel, thread_ts),
+            ).fetchone()
+        return row is not None
+
     def get_escalation(self, id: str) -> Escalation | None:
         with self._lock:
             row = self._db.execute(
