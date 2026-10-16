@@ -70,6 +70,15 @@ services:
       # SSRF protection keeps doing its job for every other destination.
       SSRF_PROXY_ALLOW_PRIVATE_DOMAINS: n8n_local
 
+  # The plugin daemon's remote-debugging port is published on every interface by
+  # default. Nothing in this demo uses it, so keep it on loopback. Dify reads
+  # EXPOSE_PLUGIN_DEBUGGING_PORT as a bare port number, so the address has to be
+  # set here rather than in .env. `!override` replaces the list instead of
+  # appending to it.
+  plugin_daemon:
+    ports: !override
+      - "127.0.0.1:${EXPOSE_PLUGIN_DEBUGGING_PORT:-5003}:${PLUGIN_DEBUGGING_PORT:-5003}"
+
 networks:
   demo-rag-net:
     external: true

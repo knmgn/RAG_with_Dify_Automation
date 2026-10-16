@@ -91,7 +91,7 @@ class DifyConsole:
             "POST",
             "/login",
             body=json.dumps(
-                {"email": self.email, "password": encoded, "language": "ja-JP", "remember_me": True}
+                {"email": self.email, "password": encoded, "language": "en-US", "remember_me": True}
             ).encode("utf-8"),
             content_type="application/json",
             with_csrf=False,

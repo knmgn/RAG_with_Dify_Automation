@@ -44,19 +44,20 @@ prompt-tuning afterthoughts:
 
 The pipeline was first built and measured end to end on a Japanese-language edition of the same
 policy (git tag [`v1-ja`](https://github.com/knmgn/RAG_with_Dify_Automation/tree/v1-ja)). The corpus, prompts and tests have since been
-rewritten for a U.S. company in English. The English corpus will be re-measured with the same
-scripts, and this table updated.
+rewritten for a U.S. company in English, and the English edition was re-measured with the same
+scripts on 2026-10-16 (Dify 1.17.1, `gpt-4o-mini`, `text-embedding-3-large`).
 
-| Metric | `v1-ja` (measured) | English edition | How to reproduce |
+| Metric | English edition | `v1-ja` | How to reproduce |
 |---|---|---|---|
-| Retrieval **Recall@4** on the 10 design-doc test queries | **10/10 = 100%** | pending | `python3 scripts/measure_recall.py --threshold 0.3` |
-| End-to-end tests (policy Q&A, refusal, file delivery via n8n) | **3/3 pass** | pending | `python3 scripts/test_e2e.py` |
-| n8n connectivity chain (host → n8n, Dify → n8n, WF1, WF2) | **4/4 pass** | pending | `./docker/test/test_webhook.sh` |
-| Top retrieval score, in-scope vs. out-of-scope queries | `0.36–0.64` vs. `0.21–0.38` | pending | `python3 scripts/measure_recall.py` |
-| Slack bridge unit tests (question flow, escalation lifecycle, Dify client) | — | **31/31 pass** | `cd slack_bridge && python3 -m unittest discover -s tests` |
+| Retrieval **Recall@4** on the 10 design-doc test queries | **10/10 = 100%** | 10/10 = 100% | `python3 scripts/measure_recall.py --threshold 0.3` |
+| End-to-end tests (policy Q&A, refusal, file delivery via n8n) | **3/3 pass** | 3/3 pass | `python3 scripts/test_e2e.py` |
+| n8n connectivity chain (host → n8n, Dify → n8n, WF1, WF2) | **4/4 pass** | 4/4 pass | `./docker/test/test_webhook.sh` |
+| Top retrieval score, in-scope vs. out-of-scope queries | `0.35–0.66` vs. `0.14–0.40` | `0.36–0.64` vs. `0.21–0.38` | `python3 scripts/measure_recall.py` |
+| Slack bridge unit tests (question flow, follow-ups, escalation lifecycle, Dify client) | **37/37 pass** | — | `cd slack_bridge && python3 -m unittest discover -s tests` |
 
-The score row matters. On `v1-ja` the two ranges **overlapped**, so a score threshold alone can
-never be an anti-hallucination guardrail. That observation drives the two-layer design below.
+The score row matters. In both editions the two ranges **overlapped**, so a score threshold alone can
+never be an anti-hallucination guardrail. On the English corpus, "How is severance pay calculated?"
+scored 0.3959, above the weakest correct hit (0.3456), and was still refused by the system prompt. That observation drives the two-layer design below.
 
 ---
 
@@ -127,8 +128,8 @@ The Dify Web App remains available as a second channel.
 
 ### 🛡️ Zero-Hallucination Guardrails (strict fallback routing)
 - **Layer 1, retrieval:** a score threshold drops low-relevance chunks before they reach the LLM. The
-  value is **measured, not picked**: on `v1-ja`, `0.3` sat below every correct hit with margin while
-  cutting 3 of 4 out-of-scope queries, and the commonly recommended `0.5` was rejected because it
+  value is **measured, not picked**: on both editions, `0.3` sat below every correct hit (lowest
+  0.3456 in English) while cutting 3 of 4 out-of-scope queries, and the commonly recommended `0.5` was rejected because it
   discarded most correct answers under Weighted Score. `measure_recall.py` reports the score
   distribution so the threshold can be re-derived for any corpus.
 - **Layer 2, generation:** the system prompt forbids inference, general legal or tax commentary,
