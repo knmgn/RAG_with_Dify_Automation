@@ -82,15 +82,15 @@ CHILD_DELIMITER = "\\n"
 CHILD_MAX_CHARS = 400
 
 TOP_K = 4
-# A noise filter, not the guardrail. On the Japanese corpus (tag v1-ja) the
-# in-scope and out-of-scope top scores overlapped (0.3623–0.6438 vs
-# 0.2144–0.3849), so no threshold can separate them, and refusing is the job of
-# the §1-2 system prompt. 0.3 was chosen there because it sat below every
-# correct hit while cutting 3 of 4 out-of-scope queries.
+# A noise filter, not the guardrail. In-scope and out-of-scope top scores
+# overlap (English corpus 0.3456–0.6615 vs 0.1448–0.3959; tag v1-ja
+# 0.3623–0.6438 vs 0.2144–0.3849), so no threshold can separate them, and
+# refusing is the job of the §1-2 system prompt. 0.3 sits below every correct
+# hit on both corpora while cutting 3 of 4 out-of-scope queries.
 #
-# The English corpus has not been measured yet. Before trusting 0.3, run
+# After changing the corpus, re-run
 #     python3 scripts/measure_recall.py
-# and put the threshold below the lowest in-scope top score.
+# and keep the threshold below the lowest in-scope top score.
 SCORE_THRESHOLD = 0.3
 
 # §3-3 ⑥ Step 1 — schema, and Step 2 — the values for this one document.

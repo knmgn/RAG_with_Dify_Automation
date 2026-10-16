@@ -14,7 +14,8 @@
 > Japanese-language policy, and corrected every statement that turned out not to work. What was
 > wrong, and why, is recorded in **§4-8**. v1.6 rewrites the policy, prompts, templates and tests for
 > a U.S. company in English. The pipeline is unchanged. Numbers marked "`v1-ja`" were measured on
-> the Japanese edition, and the English edition is re-measured with the same scripts (`scripts/`, §7).
+> the Japanese edition; the English edition was re-measured with the same scripts (`scripts/`, §7) on
+> 2026-10-16.
 
 ---
 
@@ -69,9 +70,9 @@ path. The same stack has run on a Japanese corpus (tag `v1-ja`); the language-sp
 there are documented in §4-8.
 
 > **On the guardrail.** Earlier revisions of this document placed a score gate between
-> retrieval and the LLM. Measurement on `v1-ja` showed that in-scope and out-of-scope similarity
-> scores overlap (0.3623–0.6438 vs 0.2144–0.3849), so no threshold separates them and the gate was
-> removed. The zero-hallucination boundary is enforced by the system prompt, and verified by
+> retrieval and the LLM. Measurement showed that in-scope and out-of-scope similarity scores
+> overlap (English edition 0.3456–0.6615 vs 0.1448–0.3959; `v1-ja` 0.3623–0.6438 vs 0.2144–0.3849),
+> so no threshold separates them and the gate was removed. The zero-hallucination boundary is enforced by the system prompt, and verified by
 > an automated test rather than asserted (§2-4, §3-4).
 
 ---
@@ -257,12 +258,12 @@ This node inherits the Retrieval Setting configured when the knowledge base was 
 v1.4 branched on "Rerank score > 0.5" and returned the fixed refusal below the threshold.
 **Measurement showed this design does not work, so it was dropped in v1.5.**
 
-Measurements on `v1-ja` (`scripts/measure_recall.py`, Weighted Score, Top K=4):
+Measurements (`scripts/measure_recall.py`, Weighted Score, Top K=4, threshold off):
 
-| Query set | Range of top score |
-|---|---|
-| In-scope queries (the 10 in §3-4) | **0.3623 – 0.6438** |
-| Out-of-scope queries (4, e.g. "Do I get an allowance if I adopt a cat?") | **0.2144 – 0.3849** |
+| Query set | English edition | `v1-ja` |
+|---|---|---|
+| In-scope queries (the 10 in §3-4) | **0.3456 – 0.6615** | 0.3623 – 0.6438 |
+| Out-of-scope queries (4, e.g. "Do I get an allowance if I adopt a cat?") | **0.1448 – 0.3959** | 0.2144 – 0.3849 |
 
 The ranges overlap, so **no threshold can separate in-scope from out-of-scope**.
 Raise it and correct questions are dropped; lower it and out-of-scope ones get through.
@@ -367,6 +368,7 @@ Choosing `Hybrid Search` reveals two further submodes. **Choose `Weighted Score`
    other than the LLM provider. For a setup pitched to SME owners as "fully in-house", that is a clear hole.
    Weighted Score is computed inside Weaviate, so the only egress is OpenAI (embeddings and LLM).
 2. **No loss of accuracy.** On `v1-ja`, **both scored Recall@4 = 100%** on the 10 queries in §3-4.
+   Weighted Score alone also scores 100% on the English edition.
    When the document is small (20 articles) and Parents are cut per article, as here, there is
    almost nothing left for a reranker to reorder.
 
@@ -389,10 +391,11 @@ Choosing `Hybrid Search` reveals two further submodes. **Choose `Weighted Score`
 | **Score Threshold** | `0.3` (ON) |
 
 > ⚠️ **A Score Threshold of `0.5` was wrong** (as written in v1.4). Measured Weighted Score values
-> for in-scope queries on `v1-ja` were 0.3623–0.6438, so 0.5 dropped most correct questions.
+> for in-scope queries were 0.3456–0.6615 (English) and 0.3623–0.6438 (`v1-ja`), so 0.5 dropped most
+> correct questions.
 >
 > More importantly, **the threshold does not work as a guardrail**. Out-of-scope queries scored up to
-> 0.3849, above the lowest in-scope score of 0.3623 (table in §2-4).
+> 0.3959 (English) and 0.3849 (`v1-ja`), above the lowest in-scope score (table in §2-4).
 > `0.3` is set as a noise filter that cuts the clearly irrelevant, and hallucination prevention is
 > the job of the §1-2 system prompt.
 >
@@ -495,7 +498,19 @@ Recall@4 = 10/10 = 100%   (target: >= 90%)
 The one out-of-scope query that got through (how many days of paid leave, an HR question the policy
 does not cover) was refused by the §1-2 system prompt with the fixed message.
 
-**English edition:** pending re-measurement with the same script and the parameters in §3-3.
+**English edition (2026-10-16, Dify 1.17.1):** Hybrid Search + Weighted Score (0.7 / 0.3) / Top K = 4 /
+Score Threshold = 0.3 / text-embedding-3-large / Parent-Child (Parent 3,500 / Child 400 characters)
+
+```
+Recall@4 = 10/10 = 100%   (target: >= 90%)
+
+  in-scope     top-score  0.3456 .. 0.6615
+  out-of-scope top-score  0.0000 .. 0.3959   (3 of 4 return zero hits)
+```
+
+The one out-of-scope query that got through ("How is severance pay calculated?", 0.3959) was refused
+by the §1-2 system prompt with the fixed message, as were the other three. `scripts/test_e2e.py`
+passed 3/3 on the same build.
 
 To reproduce:
 ```bash

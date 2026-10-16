@@ -12,15 +12,15 @@ dependencies:
 - current_identifier: null
   type: marketplace
   value:
-    marketplace_plugin_unique_identifier: langgenius/openai:1.0.0@c645d52efece517b10435f28da529156a86050dfa28fc4fde8089c038eee7f5a
+    marketplace_plugin_unique_identifier: langgenius/openai:1.0.7@f36c3761167b3af0bfb4975b728fe3cd126342d076e1ec5359e6d4f92557d3d4
     version: null
 kind: app
-version: 0.6.0
+version: 0.7.0
 workflow:
   conversation_variables: []
   environment_variables:
   - description: Shared secret for the n8n webhook Header Auth credential.
-    id: 01a64b37-e19e-4240-a1d5-0e52e0669104
+    id: cbbd69ab-d802-423e-8ceb-a667507ac803
     name: N8N_WEBHOOK_TOKEN
     selector:
     - env
@@ -212,7 +212,7 @@ workflow:
       width: 244
     - data:
         dataset_ids:
-        - 9433puo0PZBKpOdseJvxnzRTMCiCt2j3o3noI0Jh9W2EYIdwdwDrFENSyI2I6/6U
+        - fFYPDh5Sxbq/0wXKNwGX+nJR7CDAcS6FLUnsm4lJFTCeeWTA4ftF3q6eZWFtaQIP
         desc: ''
         metadata_filtering_mode: disabled
         multiple_retrieval_config:
@@ -468,8 +468,4 @@ workflow:
       targetPosition: left
       type: custom
       width: 244
-    viewport:
-      x: 0
-      y: 0
-      zoom: 0.7
   rag_pipeline_variables: []

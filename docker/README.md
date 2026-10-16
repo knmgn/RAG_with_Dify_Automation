@@ -67,8 +67,9 @@ docker network create demo-rag-net
 ### Step 2: Prepare Dify Self-Hosted
 
 ```bash
-# Clone the official Dify repository into your home directory
-git clone https://github.com/langgenius/dify.git ~/dify-local
+# Clone a Dify release (not main) into your home directory.
+# The English edition was measured on 1.17.1.
+git clone --branch 1.17.1 --depth 1 https://github.com/langgenius/dify.git ~/dify-local
 
 # Copy this repository's override file into Dify's docker/ directory
 cp docker/dify/docker-compose.override.yaml ~/dify-local/docker/
@@ -205,7 +206,7 @@ Expected output:
 [PASS] Workflow 1 returned success JSON
 
 [INFO] Test 4/4: Workflow 2 (File Server) returns xlsx binary
-[PASS] Workflow 2 returned 16464 bytes (HTTP 200)
+[PASS] Workflow 2 returned 15078 bytes (HTTP 200)
 ```
 
 If all four pass, the full Dify → n8n chain is working.
@@ -223,6 +224,8 @@ The `download_url` field that n8n returns to Dify **must use the `localhost:5678
 
 | Symptom | Fix |
 |---|---|
+| `cannot expose privileged port 80` (rootless Docker) | Publish nginx on an unprivileged loopback port: add `EXPOSE_NGINX_PORT=127.0.0.1:8080` and `EXPOSE_NGINX_SSL_PORT=127.0.0.1:8443` to Dify's `.env`, then set `DIFY_BASE_URL=http://localhost:8080` in `scripts/.dify_admin.env` |
+| Running on a VPS | Docker-published ports bypass the host firewall. Keep every port on `127.0.0.1` (n8n and the plugin daemon already are, via this repo's compose files) and reach the UIs through an SSH tunnel: `ssh -L 8080:localhost:8080 -L 5678:localhost:5678 user@host` |
 | Out-of-memory error on `docker compose up` | Docker Desktop → Settings → Resources → set Memory to 8 GB or more |
 | Dify `/install` does not load | Check with `docker compose ps` that nginx and api are healthy |
 | Connection refused in connectivity Test 2 | Check with `docker network inspect demo-rag-net` that both containers joined the network |
