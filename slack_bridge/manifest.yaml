@@ -1,8 +1,8 @@
-# Slack app manifest for the Demo-Logi-Bot bridge.
+# Slack app manifest for the NexusLogi Bot bridge.
 # api.slack.com/apps → Create New App → From an app manifest → paste this file.
 display_information:
-  name: Demo-Logi-Bot
-  description: Internal policy assistant for Demo Logistics Inc. (Dify RAG)
+  name: NexusLogi Bot
+  description: Internal policy assistant for Nexus Logistics, Inc. (Dify RAG)
   background_color: "#1f3864"
 features:
   app_home:
@@ -10,19 +10,27 @@ features:
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   bot_user:
-    display_name: Demo-Logi-Bot
+    # Only a-z, 0-9, -, _ and . are allowed here; this is the @mention handle.
+    # The app name above (spaces allowed) is what the app is listed as.
+    display_name: nexuslogi-bot
     always_online: true
 oauth_config:
   scopes:
     bot:
-      - app_mentions:read   # questions asked with @Demo-Logi-Bot in channels
+      - app_mentions:read   # questions asked with @nexuslogi-bot in channels
+      - channels:history    # follow-ups in the bot's threads without an @-mention (public channels)
       - chat:write          # answers, escalation cards, human replies
+      - chat:write.customize  # post an owner's reply under their name and photo
+      - groups:history      # the same in private channels
       - im:history          # questions asked in a direct message
       - reactions:write     # the ⏳ "working on it" reaction
+      - users:read          # look up the replying owner's name and photo
 settings:
   event_subscriptions:
     bot_events:
       - app_mention
+      - message.channels
+      - message.groups
       - message.im
   interactivity:
     is_enabled: true        # "Reply in thread" / "Mark resolved" buttons and the reply modal

@@ -4,7 +4,7 @@
 #
 # Setup:
 #   1. From the docker/ directory, place the xlsx file:
-#        cp ../../経費精算テンプレート_v3.xlsx ./templates/expense_template_v3.xlsx
+#        cp ../../expense_template_v3.xlsx ./templates/expense_template_v3.xlsx
 #        # On macOS, strip extended attributes if file came via Google Drive sync:
 #        xattr -c ./templates/expense_template_v3.xlsx
 #   2. Ensure the shared network exists (created once by ../README.md):
@@ -35,8 +35,8 @@ services:
       - N8N_SECURE_COOKIE=false
       # Set N8N_HOST and WEBHOOK_URL for production deployments behind
       # a reverse proxy. For local dev these defaults are fine.
-      # - N8N_HOST=n8n.example.co.jp
-      # - WEBHOOK_URL=https://n8n.example.co.jp/
+      # - N8N_HOST=n8n.example.com
+      # - WEBHOOK_URL=https://n8n.example.com/
     restart: always
     networks:
       - default

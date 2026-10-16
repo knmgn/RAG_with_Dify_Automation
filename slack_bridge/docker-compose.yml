@@ -1,4 +1,4 @@
-# Slack front end for Demo-Logi-Bot (Socket Mode bridge → Dify Service API)
+# Slack front end for NexusLogi Bot (Socket Mode bridge → Dify Service API)
 #
 # Setup:
 #   1. Create the Slack app from manifest.yaml and fill in .env:

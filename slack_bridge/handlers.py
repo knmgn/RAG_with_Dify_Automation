@@ -8,13 +8,15 @@ Flow:
   question (mention or DM) → Dify Service API → threaded answer with sources
   └ guardrail fired (fixed refusal) → escalation card in the owner channel
       ├ "Reply in thread" → modal → the owner's answer is posted in the
-      │                      employee's thread, labelled as human-written
+      │                      employee's thread under the owner's own name and
+      │                      profile photo, labelled as human-written
       └ "Mark resolved"   → card closed without a reply
 """
 
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from typing import Any, Callable
 
@@ -33,6 +35,21 @@ from store import ConversationStore, Escalation
 log = logging.getLogger(__name__)
 
 WORKING_REACTION = "hourglass_flowing_sand"
+
+# Thread replies that close the conversation rather than ask something. Without
+# an @-mention they get no answer, so "Thanks!" does not become a refusal and an
+# escalation card.
+_ACKNOWLEDGEMENTS = re.compile(
+    r"(thanks?( you)?( so much| a lot)?|thx|ty|ok(ay)?|got it|great|perfect|cool|nice|understood|noted"
+    r"|ありがとう(ございます)?|了解(です|しました)?|承知(しました)?|わかりました)"
+    r"(:[a-z0-9_+-]+:|[\s!.。！])*",
+    re.IGNORECASE,
+)
+
+
+def is_acknowledgement(text: str) -> bool:
+    text = text.strip()
+    return not text or bool(_ACKNOWLEDGEMENTS.fullmatch(text)) or bool(re.fullmatch(r"(:[a-z0-9_+-]+:\s*)+", text))
 
 
 class Bridge:
@@ -63,6 +80,25 @@ class Bridge:
             self._answer(client, channel, thread_ts, user, question)
         finally:
             self._react(client, "reactions_remove", channel, event["ts"])
+
+    def handle_thread_message(self, event: dict[str, Any], client: Any, bot_user_id: str | None) -> None:
+        """A plain channel message: answer it only as a follow-up in a thread the bot is already in."""
+        thread_ts = event.get("thread_ts")
+        if not thread_ts or thread_ts == event.get("ts"):
+            return
+        # A message that mentions the bot also arrives as app_mention; answer it once.
+        if bot_user_id and f"<@{bot_user_id}>" in event.get("text", ""):
+            return
+        channel = event.get("channel", "")
+        if self.store.get(channel, thread_ts) is None:
+            return
+        # Once a thread is handed to a person, the bot stays quiet unless mentioned,
+        # so "thanks" to the owner (or the owner typing in the thread) gets no AI reply.
+        if self.store.thread_escalated(channel, thread_ts):
+            return
+        if is_acknowledgement(event.get("text", "")):
+            return
+        self.handle_question(event, client)
 
     def _answer(self, client: Any, channel: str, thread_ts: str, user: str, question: str) -> None:
         try:
@@ -155,13 +191,23 @@ class Bridge:
 
         escalation = self.store.get_escalation(escalation_id)
         assert escalation is not None
+        message = {
+            "channel": escalation.channel,
+            "thread_ts": escalation.thread_ts,
+            "text": text[:3000],
+            "blocks": human_answer_blocks(owner, text, self.lang),
+        }
+        identity = self._owner_identity(client, owner)
         try:
-            client.chat_postMessage(
-                channel=escalation.channel,
-                thread_ts=escalation.thread_ts,
-                text=text[:3000],
-                blocks=human_answer_blocks(owner, text, self.lang),
-            )
+            try:
+                client.chat_postMessage(**message, **identity)
+            except Exception:
+                if not identity:
+                    raise
+                # e.g. chat:write.customize not granted yet: post under the bot's
+                # own name instead. The header and note still say who wrote it.
+                log.warning("posting as %s failed; falling back to the bot identity", owner, exc_info=True)
+                client.chat_postMessage(**message)
         except Exception:
             # Give the claim back so the card's buttons keep working.
             self.store.reopen_escalation(escalation_id)
@@ -194,6 +240,30 @@ class Bridge:
                 status_line=status_line,
             ),
         )
+
+    @staticmethod
+    def _owner_identity(client: Any, owner: str) -> dict[str, str]:
+        """The owner's Slack name and profile photo, to post their answer under.
+
+        AI answers show the bot's icon; human answers show the person's face, so
+        the thread itself makes clear which is which. Slack still marks the
+        message with an APP badge, so it cannot pass for a message the owner
+        typed directly. Returns {} if the profile cannot be read (users:read
+        missing, deactivated user), in which case the bot identity is used.
+        """
+        try:
+            profile = client.users_info(user=owner)["user"]["profile"]
+        except Exception:
+            log.warning("could not read profile of %s", owner, exc_info=True)
+            return {}
+        name = (profile.get("display_name") or profile.get("real_name") or "").strip()
+        icon = profile.get("image_192") or profile.get("image_72") or ""
+        identity: dict[str, str] = {}
+        if name:
+            identity["username"] = name
+        if icon:
+            identity["icon_url"] = icon
+        return identity
 
     @staticmethod
     def _tell(client: Any, body: dict[str, Any], text: str) -> None:

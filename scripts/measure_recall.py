@@ -2,9 +2,8 @@
 """Measure Recall@K on the knowledge base using the §3-4 test queries.
 
 Runs the ten in-scope queries from the design doc plus a set of out-of-scope
-queries (the "猫を飼ったら手当出る？" / "Do I get an allowance for adopting a
-cat?" case from demo Scene 3), and reports both
-recall and the rerank score distribution. The score gap between the two sets is
+queries (the "Do I get an allowance if I adopt a cat?" case from demo Scene 3),
+and reports both recall and the score distribution. The score gap between the two sets is
 what a Score Threshold has to separate, so this is also how SCORE_THRESHOLD in
 provision_knowledge.py was chosen.
 
@@ -16,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -26,28 +26,27 @@ from provision_knowledge import RETRIEVAL_WEIGHTS
 
 STATE_FILE = REPO_ROOT / "scripts" / ".provision_state.json"
 
-# §3-4 — query, and the clause that must appear in the top K. The queries stay in
-# Japanese because the knowledge base is Japanese; the comments give the meaning.
+# §3-4 — query, and the article that must appear in the top K.
 TEST_QUERIES: list[tuple[str, str]] = [
-    ("深夜帰りのタクシー代いくら？", "第5条"),  # late-night taxi home: how much? → Art. 5
-    ("クライアントとタクシー乗っていいの？", "第5条"),  # taxi with a client OK? → Art. 5
-    ("タクシー上限超えた", "第5条"),  # went over the taxi cap → Art. 5
-    ("経費の締め切りいつ？", "第8条"),  # expense deadline? → Art. 8
-    ("テンプレ v3 どこ？", "第9条"),  # where is template v3? → Art. 9
-    ("25日過ぎちゃった", "第8条"),  # missed the 25th → Art. 8
-    ("保険証なくした", "第15条"),  # lost my health insurance card → Art. 15
-    ("夜勤手当いくら？", "第13条"),  # night-shift allowance? → Art. 13
-    ("深夜シフトいつまでに申請？", "第14条"),  # night-shift filing deadline? → Art. 14
-    ("新幹線グリーン車乗れる？", "第4条"),  # Shinkansen first class allowed? → Art. 4
+    ("How much can I claim for a late-night ride home?", "Article 5"),
+    ("Can I take a taxi with a client?", "Article 5"),
+    ("My rideshare went over the cap", "Article 5"),
+    ("When is the expense report deadline?", "Article 8"),
+    ("Where is template v3?", "Article 9"),
+    ("I missed the 25th", "Article 8"),
+    ("I lost my insurance card", "Article 15"),
+    ("How much is the night shift differential?", "Article 13"),
+    ("When do I need to request a night shift?", "Article 14"),
+    ("Can I fly business class?", "Article 4"),
 ]
 
-# Questions the regulation genuinely does not answer. The bot must decline
+# Questions the policy genuinely does not answer. The bot must decline
 # rather than improvise — see the guardrail rules in §1-2.
 OUT_OF_SCOPE_QUERIES = [
-    "猫を飼ったら手当出る？",  # allowance for adopting a cat?
-    "有給休暇は何日もらえますか？",  # how many days of paid leave?
-    "退職金の計算方法を教えて",  # how is severance pay calculated?
-    "今日の東京の天気は？",  # weather in Tokyo today?
+    "Do I get an allowance if I adopt a cat?",
+    "How many vacation days do I get?",
+    "How is severance pay calculated?",
+    "What's the weather in New York today?",
 ]
 
 
@@ -88,9 +87,19 @@ def search(
     return response.get("records", [])
 
 
+_ARTICLE = re.compile(r"^(Article \d+)\b")
+
+
 def clause_of(record: dict[str, Any]) -> str:
+    """The article a parent chunk belongs to, e.g. "Article 5".
+
+    Parents are cut on article headings (§3-3 ①), so each one starts with
+    "Article N (...)". Matching the whole token keeps "Article 15" from
+    counting as a hit for "Article 1" or "Article 5".
+    """
     content = record.get("segment", {}).get("content", "").lstrip()
-    return content[:12].split("（")[0].strip()
+    match = _ARTICLE.match(content)
+    return match.group(1) if match else content[:20]
 
 
 def main() -> int:

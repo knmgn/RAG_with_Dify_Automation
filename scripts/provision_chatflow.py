@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 4 — build the Dify Chatflow from code.
 
-Generates the DSL for the Demo-Logi-Bot Chatflow described in
+Generates the DSL for the NexusLogi Bot Chatflow described in
 `02_dify_chatflow_design.md` §2 and §4-7, imports it, publishes it, and writes
 the exported DSL to `dify/chatflow_dsl.yaml` as the §7 deliverable.
 
@@ -9,13 +9,10 @@ the exported DSL to `dify/chatflow_dsl.yaml` as the §7 deliverable.
 
 Requires provision_knowledge.py to have run first (it needs the dataset id).
 
-Graph (node titles are Japanese because they show in the Dify UI the demo uses):
+Graph:
 
-    [開始] → [インテント分類] ─ 規程Q&A ──→ [ナレッジ検索] → [回答生成] → [回答]
-                             └ ファイル要求 → [n8n Webhook] → [ファイル回答]
-
-    [Start] → [Intent classifier] ─ policy Q&A ──→ [Knowledge retrieval] → [LLM] → [Answer]
-                                  └ file request → [n8n Webhook] → [File answer]
+    [Start] → [Intent classifier] ─ Policy Q&A ──→ [Knowledge retrieval] → [Answer generation] → [Answer]
+                                  └ File request → [n8n Webhook] → [Parse response] → [File answer]
 """
 
 from __future__ import annotations
@@ -36,10 +33,11 @@ from provision_knowledge import RETRIEVAL_WEIGHTS, SCORE_THRESHOLD, TOP_K
 STATE_FILE = REPO_ROOT / "scripts" / ".provision_state.json"
 DSL_OUTPUT = REPO_ROOT / "dify" / "chatflow_dsl.yaml"
 
-APP_NAME = "Demo-Logi-Bot（社内規程アシスタント）"
+APP_NAME = "NexusLogi Bot (Internal Policy Assistant)"
 APP_DESCRIPTION = (
-    "株式会社デモ・ロジスティクスの社内規程 Q&A と経費精算テンプレート配布を行う "
-    "Chatflow。規程Q&Aは Hybrid Search + Rerank、ファイル要求は n8n Webhook 経由。"
+    "Answers Nexus Logistics, Inc. policy questions and delivers the expense report "
+    "template. Policy Q&A uses Hybrid Search with Weighted Score; file requests go "
+    "through an n8n webhook."
 )
 
 LLM_PROVIDER = "langgenius/openai/openai"
@@ -52,65 +50,65 @@ CLASS_FILE = "2"
 # substitutes is `{{#context#}}` (graphon/nodes/llm/llm_utils.py:CONTEXT_PLACEHOLDER).
 # The design doc's `{{#context.result#}}` is never replaced, so the model would
 # receive the literal string and answer with no knowledge at all.
-SYSTEM_PROMPT = """# 役割
-あなたは「株式会社デモ・ロジスティクス」社内規程アシスタント "Demo-Logi-Bot" です。
-社員の旅費交通費・経費精算・労務に関する質問に、社内規程（DL-HR-RG-2024-007）に基づいて正確に回答します。
+SYSTEM_PROMPT = """# Role
+You are "NexusLogi Bot", the internal policy assistant for Nexus Logistics, Inc.
+You answer employee questions about travel, expenses and HR procedures accurately, based on the internal policy (NL-HR-RG-2024-007).
 
-# 絶対遵守ルール
-1. 回答は必ず<context>タグ内のナレッジ（マニュアル本文）を最優先で参照してください。
-2. <context>に該当する記載が存在しない、または関連スコアが低い場合は、推測・憶測・一般論で補完してはいけません。代わりに必ず以下の定型文で回答してください：
+# Non-negotiable rules
+1. Always base your answer on the knowledge inside the <context> tag (the policy text).
+2. If <context> does not contain the answer, or its relevance is low, NEVER fill the gap with guesses, assumptions or general knowledge. Instead, reply with exactly this message:
 
-   「ご質問の件について、社内規程（DL-HR-RG-2024-007）内に明示的な記載が見当たりませんでした。詳細については総務部の佐藤（内線1234／sato.kenichi@demo-logistics.example.co.jp）まで直接お問い合わせください。」
+   "No explicit provision covering your question was found in the internal policy (NL-HR-RG-2024-007). Please contact People Operations directly (ext. 1234 / people-ops@nexus-logistics.example.com)."
 
-3. 法律・税務・労務に関する一般論を質問された場合でも、社内規程に直接の記載がない限り、上記の定型文で回答してください。「労働基準法では〜」等の一般解説は禁止です。
-4. 金額・期日・条件は、<context>の表記を一字一句改変せず引用してください（例：「1回あたり15,000円（消費税込）」と完全一致で書く）。
-5. ユーザーが規程の改変・例外適用を求めた場合（「特別に認めて」等）は、判断権限がないため総務部に確認するよう促してください。
+3. Even when asked about general legal, tax or employment matters, use the message above unless the internal policy addresses the point directly. General explanations such as "Under the FLSA..." or "The IRS generally..." are prohibited.
+4. Quote amounts, deadlines and conditions from <context> exactly as written, without rewording (e.g. write "USD 100 per ride (tax and tip included)" word for word).
+5. If the user asks for an exception or a change to the rules (e.g. "Can you make an exception for me?"), state that you have no authority to decide and direct them to People Operations.
 
-# 回答フォーマット（厳守）
-回答は以下の3ブロック構造で出力してください。
+# Answer format (mandatory)
+Structure every answer in these three blocks:
 
-【結論】
-（質問への直接回答を1〜3文で簡潔に。金額・条件・期日があれば箇条書きで明示）
+**Answer**
+(A direct answer in 1-3 sentences. List any amounts, conditions and deadlines as bullet points.)
 
-【詳細・補足】
-（規程の該当条文を踏まえて補足説明。NG事例や例外条件がある場合は必ず明記）
+**Details**
+(Supporting explanation based on the relevant article. Always mention prohibited cases or exceptions if there are any.)
 
-【引用元】
-- 規程名：株式会社デモ・ロジスティクス 旅費交通費・経費精算および労務手続き規定（DL-HR-RG-2024-007）
-- 該当箇所：第◯章 第◯条 第◯項（◯◯について）
-- 最終改訂：2024年10月1日（第3版）
+**Source**
+- Policy: Nexus Logistics, Inc. Travel, Expense Reimbursement and HR Procedures Policy (NL-HR-RG-2024-007)
+- Section: Article X, Clause/Paragraph X (topic)
+- Last revised: October 1, 2024 (Revision 3)
 
-# トーン・スタイル
-- 敬体（です・ます調）で、ビジネス文書として丁寧かつ簡潔に。
-- 不必要な前置き（「ご質問ありがとうございます」等）は省略。
-- 絵文字は使用しない。
+# Tone and style
+- Polite, concise business English.
+- No unnecessary preamble (such as "Thank you for your question").
+- No emoji.
 
-# 禁止事項
-- ナレッジに根拠のない金額・期限・人名・部署名の生成
-- 過去の質問履歴に基づく回答の使い回し（毎回ナレッジを参照する）
-- "おそらく"、"一般的には"、"だと思います" 等の曖昧表現
-- 規程番号・条文番号の創作
+# Prohibited
+- Amounts, deadlines, names or departments that are not grounded in the knowledge
+- Reusing earlier answers instead of consulting the knowledge each time
+- Hedging language such as "probably", "generally" or "I think"
+- Inventing policy numbers or article numbers
 
-# 入力データ
-ユーザーの質問：{{#sys.query#}}
+# Input
+User question: {{#sys.query#}}
 
-参照ナレッジ：
+Reference knowledge:
 <context>
 {{#context#}}
 </context>"""
 
 # §2-2 verbatim.
-CLASSIFIER_INSTRUCTION = """ユーザーの発話を以下の2クラスのいずれかに分類してください。
+CLASSIFIER_INSTRUCTION = """Classify the user's message into one of the following two classes.
 
-【クラス1：規程Q&A】
-- 規程内容に関する質問
-- 例：「タクシー代の上限は？」「経費精算の締切は？」「夜勤手当の計算方法は？」
+[Class 1: Policy Q&A]
+- Questions about what the policy says
+- Examples: "What is the cap for a late-night ride home?", "When is the expense report deadline?", "How is the night shift differential calculated?"
 
-【クラス2：ファイル要求】
-- 経費精算テンプレートやフォーマットの送付・ダウンロード要求
-- 例：「経費精算のフォーマットちょうだい」「テンプレートのリンクが欲しい」「Excelファイル送って」
+[Class 2: File request]
+- Requests to send or download the expense report template or form
+- Examples: "Send me the expense report template", "I need the template link", "Can you send me the Excel file?"
 
-判定が曖昧な場合は【クラス1：規程Q&A】を選択してください。"""
+If the classification is ambiguous, choose [Class 1: Policy Q&A]."""
 
 # The HTTP Request node exposes its response body as a *string*
 # (`outputs["body"] = response.text`), not as a parsed object. So neither
@@ -144,23 +142,23 @@ FILE_ANSWER_TEMPLATE = """{{#parse_response.message#}}
 📎 **{{#parse_response.filename#}}**
 {{#parse_response.download_url#}}
 
-【ご注意】
-- 提出期限：{{#parse_response.deadline#}}
+**Please note**
+- Deadline: {{#parse_response.deadline#}}
 - {{#parse_response.macro_warning#}}
 
-【引用元】
-規程：{{#parse_response.regulation_ref#}}
-窓口：総務部 佐藤（内線1234）／ 経理部 鈴木（内線1456）"""
+**Source**
+Policy: {{#parse_response.regulation_ref#}}
+Contacts: People Operations (ext. 1234) / Accounts Payable (ext. 1456)"""
 
 OPENING_STATEMENT = (
-    "株式会社デモ・ロジスティクスの社内規程アシスタントです。"
-    "旅費交通費・経費精算・労務手続きについてお答えします。"
+    "Hi, I'm NexusLogi Bot, the internal policy assistant for Nexus Logistics, Inc. "
+    "Ask me about travel, expense reimbursement and HR procedures."
 )
 
 SUGGESTED_QUESTIONS = [
-    "深夜帰りのタクシー代いくら？",
-    "経費精算の締め切りはいつ？",
-    "経費精算のフォーマットちょうだい",
+    "How much can I claim for a late-night ride home?",
+    "When is the expense report deadline?",
+    "Send me the expense report template.",
 ]
 
 
@@ -256,18 +254,18 @@ def build_dsl(dataset_id: str, webhook_url: str, webhook_token: str) -> dict[str
     )
 
     nodes = [
-        node("start", (30, 300), {"type": "start", "title": "開始", "variables": []}),
+        node("start", (30, 300), {"type": "start", "title": "Start", "variables": []}),
         node(
             "intent_classifier",
             (330, 300),
             {
                 "type": "question-classifier",
-                "title": "インテント分類",
+                "title": "Intent classifier",
                 "query_variable_selector": ["sys", "query"],
                 "model": model_config,
                 "classes": [
-                    {"id": CLASS_QA, "name": "規程Q&A"},
-                    {"id": CLASS_FILE, "name": "ファイル要求"},
+                    {"id": CLASS_QA, "name": "Policy Q&A"},
+                    {"id": CLASS_FILE, "name": "File request"},
                 ],
                 "instruction": CLASSIFIER_INSTRUCTION,
                 "vision": {"enabled": False},
@@ -278,7 +276,7 @@ def build_dsl(dataset_id: str, webhook_url: str, webhook_token: str) -> dict[str
             (650, 180),
             {
                 "type": "knowledge-retrieval",
-                "title": "ナレッジ検索",
+                "title": "Knowledge retrieval",
                 "query_variable_selector": ["sys", "query"],
                 "dataset_ids": [dataset_id],
                 "retrieval_mode": "multiple",
@@ -298,7 +296,7 @@ def build_dsl(dataset_id: str, webhook_url: str, webhook_token: str) -> dict[str
             (960, 180),
             {
                 "type": "llm",
-                "title": "回答生成",
+                "title": "Answer generation",
                 "model": model_config,
                 "prompt_template": [
                     {"role": "system", "text": SYSTEM_PROMPT, "edition_type": "basic"},
@@ -312,7 +310,7 @@ def build_dsl(dataset_id: str, webhook_url: str, webhook_token: str) -> dict[str
         node(
             "final_answer",
             (1270, 180),
-            {"type": "answer", "title": "回答", "answer": "{{#llm_answerer.text#}}"},
+            {"type": "answer", "title": "Answer", "answer": "{{#llm_answerer.text#}}"},
         ),
         node(
             "n8n_webhook",
@@ -339,7 +337,7 @@ def build_dsl(dataset_id: str, webhook_url: str, webhook_token: str) -> dict[str
             (960, 470),
             {
                 "type": "code",
-                "title": "レスポンス解析",
+                "title": "Parse response",
                 "code_language": "python3",
                 "code": PARSE_RESPONSE_CODE,
                 "variables": [{"variable": "body", "value_selector": ["n8n_webhook", "body"]}],
@@ -349,7 +347,7 @@ def build_dsl(dataset_id: str, webhook_url: str, webhook_token: str) -> dict[str
         node(
             "file_answer",
             (1270, 470),
-            {"type": "answer", "title": "ファイル回答", "answer": FILE_ANSWER_TEMPLATE},
+            {"type": "answer", "title": "File answer", "answer": FILE_ANSWER_TEMPLATE},
         ),
     ]
 

@@ -37,11 +37,13 @@ def build_app() -> tuple[App, str]:
         bridge.handle_question(event, client)
 
     @app.event("message")
-    def on_message(event, client):
-        # Channel messages arrive only as app_mention; plain `message` events are
-        # handled for direct messages alone.
+    def on_message(event, context, client):
         if event.get("channel_type") == "im":
             bridge.handle_question(event, client)
+        else:
+            # In channels, a plain message counts only as a follow-up in a thread
+            # the bot is already answering; everything else is ignored.
+            bridge.handle_thread_message(event, client, context.bot_user_id)
 
     @app.action(ACTION_REPLY)
     def on_reply_button(ack, body, client):

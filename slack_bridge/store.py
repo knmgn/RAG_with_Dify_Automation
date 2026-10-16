@@ -1,7 +1,7 @@
 """Bridge state, persisted in SQLite: thread → conversation, and escalations.
 
 One Slack thread = one Dify conversation, so follow-up questions in a thread
-keep their context ("それって領収書いる？" after a taxi question) while a new
+keep their context ("Do I need a receipt for that?" after a rideshare question) while a new
 top-level question starts fresh. SQLite keeps the mapping across restarts;
 Bolt runs listeners on a thread pool, hence the lock.
 """
@@ -108,6 +108,14 @@ class ConversationStore:
         with self._lock:
             self._db.execute("UPDATE escalations SET status = 'open', handled_by = '' WHERE id = ?", (id,))
             self._db.commit()
+
+    def thread_escalated(self, channel: str, thread_ts: str) -> bool:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT 1 FROM escalations WHERE channel = ? AND thread_ts = ? LIMIT 1",
+                (channel, thread_ts),
+            ).fetchone()
+        return row is not None
 
     def get_escalation(self, id: str) -> Escalation | None:
         with self._lock:

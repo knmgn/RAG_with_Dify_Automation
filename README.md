@@ -11,9 +11,10 @@
 ![OpenAI](https://img.shields.io/badge/OpenAI-gpt--4o--mini-412991?logo=openai&logoColor=white)
 ![Enterprise AI](https://img.shields.io/badge/Enterprise_AI-Zero--Hallucination_RAG-111827)
 
-> **Demo tenant:** *Demo Logistics Inc.*, a fictional logistics company, and its
-> **Travel & Expense / HR Procedures policy (DL-HR-RG-2024-007, rev. 3)**.
-> All companies, people, addresses and phone numbers in this repository are made up.
+> **Demo tenant:** *Nexus Logistics, Inc.*, the logistics company of the fictional **Nexus Commerce**
+> group, and its **Travel, Expense Reimbursement and HR Procedures Policy (NL-HR-RG-2024-007, rev. 3)**.
+> The bot is **NexusLogi Bot**. All companies, people, addresses and phone numbers in this repository
+> are made up, and any resemblance to real organizations is coincidental.
 
 ---
 
@@ -41,16 +42,21 @@ prompt-tuning afterthoughts:
 
 ### Measured, not asserted
 
-| Metric | Result | How to reproduce |
-|---|---|---|
-| Retrieval **Recall@4** on the 10 design-doc test queries | **10/10 = 100%** | `python3 scripts/measure_recall.py --threshold 0.3` |
-| End-to-end tests (policy Q&A, refusal, file delivery via n8n) | **3/3 pass** | `python3 scripts/test_e2e.py` |
-| n8n connectivity chain (host → n8n, Dify → n8n, WF1, WF2) | **4/4 pass** | `./docker/test/test_webhook.sh` |
-| Slack bridge unit tests (question flow, escalation lifecycle, Dify client) | **25/25 pass** | `cd slack_bridge && python3 -m unittest discover -s tests` |
-| Top retrieval score, in-scope vs. out-of-scope queries | `0.36–0.64` vs. `0.21–0.38` | `python3 scripts/measure_recall.py` |
+The pipeline was first built and measured end to end on a Japanese-language edition of the same
+policy (git tag [`v1-ja`](https://github.com/knmgn/RAG_with_Dify_Automation/tree/v1-ja)). The corpus, prompts and tests have since been
+rewritten for a U.S. company in English. The English corpus will be re-measured with the same
+scripts, and this table updated.
 
-The last row matters. The two score ranges **overlap**, so a score threshold alone can never be an
-anti-hallucination guardrail. That observation drives the two-layer design below.
+| Metric | `v1-ja` (measured) | English edition | How to reproduce |
+|---|---|---|---|
+| Retrieval **Recall@4** on the 10 design-doc test queries | **10/10 = 100%** | pending | `python3 scripts/measure_recall.py --threshold 0.3` |
+| End-to-end tests (policy Q&A, refusal, file delivery via n8n) | **3/3 pass** | pending | `python3 scripts/test_e2e.py` |
+| n8n connectivity chain (host → n8n, Dify → n8n, WF1, WF2) | **4/4 pass** | pending | `./docker/test/test_webhook.sh` |
+| Top retrieval score, in-scope vs. out-of-scope queries | `0.36–0.64` vs. `0.21–0.38` | pending | `python3 scripts/measure_recall.py` |
+| Slack bridge unit tests (question flow, escalation lifecycle, Dify client) | — | **31/31 pass** | `cd slack_bridge && python3 -m unittest discover -s tests` |
+
+The score row matters. On `v1-ja` the two ranges **overlapped**, so a score threshold alone can
+never be an anti-hallucination guardrail. That observation drives the two-layer design below.
 
 ---
 
@@ -94,7 +100,7 @@ flowchart LR
     ANS -->|"threaded reply + sources"| BR
     FA --> BR
     FB --> BR
-    BR -.->|"refusal → escalation card"| H(["🧑‍💼 Policy owner<br/>General Affairs"])
+    BR -.->|"refusal → escalation card"| H(["🧑‍💼 Policy owner<br/>People Operations"])
     H -.->|"Reply in thread<br/>(human-written)"| SL
 
     classDef guard fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
@@ -120,10 +126,11 @@ The Dify Web App remains available as a second channel.
 ## Key Features
 
 ### 🛡️ Zero-Hallucination Guardrails (strict fallback routing)
-- **Layer 1, retrieval:** a score threshold of `0.3` drops low-relevance chunks before they reach the
-  LLM. The value was **measured, not picked**: it sits below every correct hit with margin while
-  cutting 3 of 4 out-of-scope queries. The commonly recommended `0.5` was tested and rejected
-  because it discarded most correct answers under Weighted Score.
+- **Layer 1, retrieval:** a score threshold drops low-relevance chunks before they reach the LLM. The
+  value is **measured, not picked**: on `v1-ja`, `0.3` sat below every correct hit with margin while
+  cutting 3 of 4 out-of-scope queries, and the commonly recommended `0.5` was rejected because it
+  discarded most correct answers under Weighted Score. `measure_recall.py` reports the score
+  distribution so the threshold can be re-derived for any corpus.
 - **Layer 2, generation:** the system prompt forbids inference, general legal or tax commentary,
   hedging words ("probably", "generally") and invented article numbers. If `<context>` does not
   contain the answer, the model must return **one fixed fallback message, word for word**.
@@ -131,10 +138,10 @@ The Dify Web App remains available as a second channel.
   cannot produce an invented answer.
 
 ### 📑 Source Citation & Provenance Tracking
-- Every answer uses a fixed three-block format: **Conclusion → Details → Source**.
+- Every answer uses a fixed three-block format: **Answer → Details → Source**.
 - The Source block names the policy ID, the chapter / article / clause and the revision date.
 - Amounts, deadlines and conditions must be quoted **verbatim** from the policy, for example
-  `JPY 15,000 per ride (tax included)`.
+  `USD 100 per ride (tax and tip included)`.
 - Knowledge chunks carry six metadata fields (`doc_id`, `doc_title`, `doc_version`, `last_revised`,
   `doc_type`, `category`) so provenance survives re-indexing when the policy is revised.
 
@@ -142,9 +149,11 @@ The Dify Web App remains available as a second channel.
 - **Semantic (0.7) + keyword (0.3)** weighting. Vector search handles colloquial phrasing
   ("how much for a late-night taxi?"), and BM25 catches exact identifiers that embeddings miss:
   form numbers such as `F-021`, file names, policy codes.
-- **Parent-Child chunking:** 250-character child chunks for precise matching and 1,400-character
-  parent chunks so each answer gets the full clause. The parent size was raised from the design value
-  of 1,200 after measurement showed the longest clause being cut in half.
+- **Parent-Child chunking:** one child chunk per line (up to 400 characters) for precise matching,
+  and parent chunks of up to 3,500 characters so each answer gets the whole article. Parent size is
+  set from the corpus itself: a parent smaller than the longest article cuts it in half, and a query
+  that matches one clause then comes back without the clause that answers it (found and fixed on
+  `v1-ja`).
 - **Weighted Score ranking runs inside Weaviate.** A hosted reranker was evaluated and dropped. It
   added a second data-egress vendor, gave no recall gain, and returned *zero results with no error*
   when rate-limited, which is a silent failure mode you do not want in production.
@@ -152,8 +161,9 @@ The Dify Web App remains available as a second channel.
 ### 🤝 Human-in-the-Loop (HITL) Workflow Integration
 - **Slack escalation loop** ([`slack_bridge/`](./slack_bridge/)): when the guardrail refuses, the
   bridge posts an escalation card to the policy owners' channel. **Reply in thread** opens a modal,
-  and the owner's answer is posted in the employee's thread under the owner's name, labelled as
-  human-written. **Mark resolved** closes the card without a reply. The first owner to act claims the
+  and the owner's answer is posted in the employee's thread **under the owner's own Slack name and
+  profile photo**, labelled as human-written. AI answers keep the bot icon, so anyone reading the
+  thread can tell which answers came from the model and which from a person. **Mark resolved** closes the card without a reply. The first owner to act claims the
   card, so two people never answer the same question.
 - **Honest hand-off:** the employee is told "a person will reply here" only if the card was actually
   posted. If escalation is off or fails, they still get the fixed refusal with the owner's contact
@@ -179,52 +189,54 @@ The Dify Web App remains available as a second channel.
 
 ## Prompt Engineering (System Message)
 
-The production prompt is written in Japanese, the language of the demo policy and its users. Below
-is a faithful English translation of the prompt deployed in
-[`scripts/provision_chatflow.py`](./scripts/provision_chatflow.py). It is included to show how
-tightly the model is constrained.
+This is the system prompt deployed by
+[`scripts/provision_chatflow.py`](./scripts/provision_chatflow.py), verbatim. It shows how tightly
+the model is constrained.
 
 ```text
 # Role
-You are "Demo-Logi-Bot", an internal assistant for Demo Logistics Inc.
-You answer employee questions on travel, expenses and HR procedures strictly on the
-basis of the provided <context> (Internal Rules DL-HR-RG-2024-007).
+You are "NexusLogi Bot", the internal policy assistant for Nexus Logistics, Inc.
+You answer employee questions about travel, expenses and HR procedures accurately, based on the internal policy (NL-HR-RG-2024-007).
 
 # Non-negotiable rules
-1. Always base your answer on the knowledge inside the <context> tag.
-2. If the context does not contain the answer, or its relevance is low, NEVER guess,
-   assume, or fill the gap with general knowledge. Instead, reply with exactly this
-   fallback message:
+1. Always base your answer on the knowledge inside the <context> tag (the policy text).
+2. If <context> does not contain the answer, or its relevance is low, NEVER fill the gap with guesses, assumptions or general knowledge. Instead, reply with exactly this message:
 
-   "No explicit provision covering your question was found in the internal rules
-    (DL-HR-RG-2024-007). Please contact Mr. Sato in General Affairs directly
-    (ext. 1234 / sato.kenichi@demo-logistics.example.co.jp)."
+   "No explicit provision covering your question was found in the internal policy (NL-HR-RG-2024-007). Please contact People Operations directly (ext. 1234 / people-ops@nexus-logistics.example.com)."
 
-3. Even for general legal, tax or labor questions, use the fallback message unless the
-   internal rules address the point directly. General explanations such as
-   "Under the Labor Standards Act..." are prohibited.
-4. Quote amounts, deadlines and conditions from <context> verbatim, character for
-   character (e.g. "JPY 15,000 per ride (tax included)").
-5. If the user asks for an exception or a change to the rules, state that you have no
-   authority to decide and direct them to General Affairs.
+3. Even when asked about general legal, tax or employment matters, use the message above unless the internal policy addresses the point directly. General explanations such as "Under the FLSA..." or "The IRS generally..." are prohibited.
+4. Quote amounts, deadlines and conditions from <context> exactly as written, without rewording (e.g. write "USD 100 per ride (tax and tip included)" word for word).
+5. If the user asks for an exception or a change to the rules (e.g. "Can you make an exception for me?"), state that you have no authority to decide and direct them to People Operations.
 
-# Output format (mandatory)
-[Conclusion]  A direct answer in 1-3 sentences; list amounts, conditions and deadlines.
-[Details]     Supporting explanation based on the relevant clause, including any
-              prohibited cases or exceptions.
-[Source]      - Policy: Demo Logistics Inc. Travel & Expense and HR Procedures
-                (DL-HR-RG-2024-007)
-              - Section: Chapter X, Article X, Clause X (topic)
-              - Last revised: 2024-10-01 (rev. 3)
+# Answer format (mandatory)
+Structure every answer in these three blocks:
+
+**Answer**
+(A direct answer in 1-3 sentences. List any amounts, conditions and deadlines as bullet points.)
+
+**Details**
+(Supporting explanation based on the relevant article. Always mention prohibited cases or exceptions if there are any.)
+
+**Source**
+- Policy: Nexus Logistics, Inc. Travel, Expense Reimbursement and HR Procedures Policy (NL-HR-RG-2024-007)
+- Section: Article X, Clause/Paragraph X (topic)
+- Last revised: October 1, 2024 (Revision 3)
+
+# Tone and style
+- Polite, concise business English.
+- No unnecessary preamble (such as "Thank you for your question").
+- No emoji.
 
 # Prohibited
-- Amounts, deadlines, names or departments not grounded in the knowledge base
-- Reusing earlier answers instead of consulting the knowledge base each time
-- Hedging language: "probably", "generally", "I think"
+- Amounts, deadlines, names or departments that are not grounded in the knowledge
+- Reusing earlier answers instead of consulting the knowledge each time
+- Hedging language such as "probably", "generally" or "I think"
 - Inventing policy numbers or article numbers
 
 # Input
 User question: {{#sys.query#}}
+
+Reference knowledge:
 <context>
 {{#context#}}
 </context>
@@ -232,7 +244,8 @@ User question: {{#sys.query#}}
 
 **Design notes**
 - The fallback is a **single fixed string**, so a refusal is easy to test. `scripts/test_e2e.py`
-  asks an out-of-scope question and asserts that the reply routes to the named owner and extension.
+  asks an out-of-scope question and asserts that the reply routes to People Operations and its
+  extension. The Slack bridge detects the same string to trigger human escalation.
 - The context placeholder is `{{#context#}}`. The design doc originally used `{{#context.result#}}`,
   which Dify never substitutes, so the model would have received a literal placeholder and
   answered with no knowledge at all. That is one of the **12 implementation pitfalls** documented in
@@ -278,7 +291,7 @@ docker compose up -d          # first start pulls images and takes 5-10 minutes
 
 ```bash
 cd <this-repo>
-cp 経費精算テンプレート_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
+cp expense_template_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
 xattr -c docker/n8n/templates/expense_template_v3.xlsx   # macOS only
 cd docker/n8n && docker compose up -d
 ```
@@ -307,16 +320,16 @@ cp scripts/.dify_admin.env.example scripts/.dify_admin.env
 ./docker/test/test_webhook.sh                       # n8n chain: 4/4 PASS
 python3 scripts/provision_knowledge.py              # knowledge base + hybrid retrieval
 python3 scripts/provision_chatflow.py               # Chatflow: import, publish, export DSL
-python3 scripts/measure_recall.py --threshold 0.3   # Recall@4 = 10/10
-python3 scripts/test_e2e.py                         # 3/3 end-to-end tests
+python3 scripts/measure_recall.py --threshold 0.3   # Recall@4 (target >= 90%) and score distribution
+python3 scripts/test_e2e.py                         # 3 end-to-end tests
 ```
 
 Then open the published app in Dify and try:
 
 | Ask | Expected behavior |
 |---|---|
-| "How much can I claim for a late-night taxi?" | Cap quoted verbatim + citation to the taxi clause |
-| "What does labor law say about overtime pay?" | Fixed fallback message + escalation contact |
+| "How much can I claim for a late-night ride home?" | "USD 100 per ride (tax and tip included)" quoted verbatim + citation to Article 5 |
+| "What does federal law say about overtime pay?" | Fixed fallback message + People Operations contact |
 | "Send me the expense report template." | n8n webhook fires, reply includes a working download link |
 
 ### 5. Connect Slack (optional)
@@ -330,10 +343,11 @@ cd slack_bridge && docker compose up -d --build
 
 Step-by-step instructions are in [`slack_bridge/README.md`](./slack_bridge/README.md).
 
-> The demo corpus and the bot's replies are in Japanese, because the use case targets Japanese
-> back-office teams. The pipeline is language-agnostic. Localizing it means swapping the knowledge
-> corpus and the system prompt, while the graph, classifier, webhook contract and guardrails stay
-> unchanged.
+> **Multilingual by design.** The same stack runs on a Japanese corpus at tag
+> [`v1-ja`](https://github.com/knmgn/RAG_with_Dify_Automation/tree/v1-ja). Localizing it means swapping the knowledge corpus and the system
+> prompt, while the graph, classifier, webhook contract, guardrails and Slack loop stay unchanged.
+> The language-specific traps found along the way (non-ASCII chunk delimiters, BM25 not tokenizing
+> CJK text, RFC 5987 file names) are documented in §4-8 of the design doc.
 
 ---
 
@@ -341,7 +355,7 @@ Step-by-step instructions are in [`slack_bridge/README.md`](./slack_bridge/READM
 
 | Path | Contents |
 |---|---|
-| `01_dummy_manual_demo_logistics.md` | Demo policy corpus (DL-HR-RG-2024-007) |
+| `01_policy_nexus_logistics.md` | Demo policy corpus (NL-HR-RG-2024-007) |
 | `02_dify_chatflow_design.md` | Full design doc: prompt, classifier, retrieval tuning, n8n patterns, 12 documented implementation pitfalls |
 | `03_operations_manual.md` | Operations runbook: re-embedding on policy revision, backup/restore, troubleshooting |
 | `04_api_examples.md` | curl / Postman examples for integrating the bot into existing systems |

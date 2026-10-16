@@ -5,7 +5,7 @@
 #
 # Setup commands from the project root:
 #
-#   cp 経費精算テンプレート_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
+#   cp expense_template_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
 #   xattr -c docker/n8n/templates/expense_template_v3.xlsx   # macOS only
 #
 # The xlsx itself is checked into the repo root and can be regenerated

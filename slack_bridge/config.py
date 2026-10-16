@@ -48,9 +48,9 @@ def load_config(env: dict[str, str] | None = None) -> Config:
     if not app_token.startswith("xapp-"):
         raise ConfigError("SLACK_APP_TOKEN must be an app-level token (xapp-...) with connections:write")
 
-    language = env.get("UI_LANGUAGE", "ja").strip() or "ja"
-    if language not in ("ja", "en"):
-        raise ConfigError("UI_LANGUAGE must be 'ja' or 'en'")
+    language = env.get("UI_LANGUAGE", "en").strip() or "en"
+    if language not in ("en", "ja"):
+        raise ConfigError("UI_LANGUAGE must be 'en' or 'ja'")
 
     return Config(
         slack_bot_token=bot_token,
@@ -58,7 +58,7 @@ def load_config(env: dict[str, str] | None = None) -> Config:
         dify_api_key=_require(env, "DIFY_API_KEY"),
         dify_api_base=env.get("DIFY_API_BASE", "http://api:5001/v1").rstrip("/"),
         escalation_channel=env.get("SLACK_ESCALATION_CHANNEL", "").strip(),
-        fallback_marker=env.get("FALLBACK_MARKER", "見当たりませんでした"),
+        fallback_marker=env.get("FALLBACK_MARKER", "No explicit provision"),
         ui_language=language,
         db_path=env.get("BRIDGE_DB_PATH", "/data/conversations.db"),
         dify_timeout=float(env.get("DIFY_TIMEOUT_SECONDS", "120")),

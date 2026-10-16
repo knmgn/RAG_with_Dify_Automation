@@ -103,11 +103,11 @@ cp .env.example .env
 
 ### Step 3: Place the xlsx template
 
-Copy `経費精算テンプレート_v3.xlsx` (the expense template) from the repository root into `docker/n8n/templates/` under an English file name:
+Copy `expense_template_v3.xlsx` (the expense template) from the repository root into `docker/n8n/templates/`:
 
 ```bash
 # From the repository root
-cp 経費精算テンプレート_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
+cp expense_template_v3.xlsx docker/n8n/templates/expense_template_v3.xlsx
 
 # On macOS, strip extended attributes if the file came through a Google Drive sync folder (important)
 xattr -c docker/n8n/templates/expense_template_v3.xlsx
@@ -241,7 +241,7 @@ This PoC setup **assumes development and internal demos**. A production delivery
 | Item | PoC | Production |
 |---|---|---|
 | Host | Mac / development machine | On-prem server or private VPS |
-| Exposed ports | `localhost:80` `localhost:5678` | Reverse proxy + internal DNS (e.g. `https://dify.example.co.jp/`) |
+| Exposed ports | `localhost:80` `localhost:5678` | Reverse proxy + internal DNS (e.g. `https://dify.example.com/`) |
 | TLS | None (HTTP) | Required, e.g. Let's Encrypt |
 | n8n authentication | Header Auth + hard-to-guess path | + IP allowlist (internal network only) |
 | Backups | Optional | Scheduled snapshots of postgres + n8n_data + the Weaviate vector store |
@@ -253,7 +253,7 @@ These are part of the delivery checklist in design doc §7.
 ## Related documents
 
 - [`../02_dify_chatflow_design.md`](../02_dify_chatflow_design.md) — design doc (§4-7 and §4-8 are the source for this setup)
-- [`../01_dummy_manual_demo_logistics.md`](../01_dummy_manual_demo_logistics.md) — the dummy policy text fed to the bot
+- [`../01_policy_nexus_logistics.md`](../01_policy_nexus_logistics.md) — the dummy policy text fed to the bot
 - [`../scripts/build_expense_template.py`](../scripts/build_expense_template.py) — xlsx regeneration script
 
 ## License

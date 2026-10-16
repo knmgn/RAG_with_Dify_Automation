@@ -6,42 +6,29 @@ This directory holds only the files you can drop straight into an editor.
 
 | File | Purpose |
 |---|---|
-| `demo_captions.srt` | Bilingual captions. Line 1 = Japanese, line 2 = English |
+| `demo_captions.srt` | English captions, one line per cue |
 
 ## Using the captions
 
 ### Burn them in (recommended)
 
-Premiere Pro, DaVinci Resolve and Final Cut Pro all import SRT directly.
-One caveat: **you cannot style the Japanese and English lines differently**.
-SRT carries no style information, so both lines look the same.
+Premiere Pro, DaVinci Resolve and Final Cut Pro all import SRT directly. Place the captions at the
+bottom center on a semi-transparent black band (60–70% opacity), at a height where they do not cover
+the bot's answer.
 
-To style them differently, split the captions into two tracks:
-
-```bash
-# Japanese-only and English-only SRT files
-awk 'BEGIN{RS="";FS="\n"} {print $1"\n"$2"\n"$3"\n"}' demo_captions.srt > captions_ja.srt
-awk 'BEGIN{RS="";FS="\n"} {print $1"\n"$2"\n"$4"\n"}' demo_captions.srt > captions_en.srt
-```
-
-Place the Japanese track about 120px from the bottom and the English track about 70px
-from the bottom. Setting English at 75–80% of the font size, in a slightly lighter colour,
-makes the primary/secondary relationship clear.
-
-### Uploading as caption tracks on YouTube / Vimeo
-
-If you upload caption tracks instead of burning them in, split the file into
-`captions_ja.srt` and `captions_en.srt` and **upload one per language**. If you upload
-the bilingual file as-is, viewers who pick Japanese captions also get the English line.
-
-> 💡 For portfolio use, **burning in** is recommended. Listing pages on Coconala and Upwork
+> 💡 For portfolio use, **burning in** is recommended. Listing pages on Upwork and similar platforms
 > often autoplay with sound and captions off, so caption tracks are never shown.
+
+### Uploading as a caption track on YouTube / Vimeo
+
+Upload `demo_captions.srt` as the English caption track. Burned-in captions remain the safer choice
+for autoplay previews.
 
 ## Timecodes
 
 The timings in `demo_captions.srt` are the values planned in the script.
 Drag each clip in your editor to match the length of the actual recording.
 
-Shot 1 (0:00–0:08) in particular assumes the measured response time of 1.7 seconds.
-If the recording has a longer pause, move the switch between captions 1 and 2 to when the
-answer actually appears on screen.
+Shot 1 (0:00–0:08) assumes a file-request response time of about 1.7 seconds, measured on the
+Japanese edition (tag `v1-ja`). English answers are longer, so re-check the timings against your
+recording, and move the switch between captions 1 and 2 to when the answer actually appears.

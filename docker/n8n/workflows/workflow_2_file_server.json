@@ -23,7 +23,7 @@
       ]
     }
   },
-  "name": "Demo_Logi - Workflow 2：File Server",
+  "name": "NexusLogi - Workflow 2：File Server",
   "nodes": [
     {
       "id": "a16667fe-9968-44e8-987a-3840ea1943bb",
@@ -69,7 +69,7 @@
               },
               {
                 "name": "Content-Disposition",
-                "value": "=attachment; filename=\"expense_template_v3.xlsx\"; filename*=UTF-8''%E7%B5%8C%E8%B2%BB%E7%B2%BE%E7%AE%97%E3%83%86%E3%83%B3%E3%83%97%E3%83%AC%E3%83%BC%E3%83%88_v3.xlsx"
+                "value": "=attachment; filename=\"expense_template_v3.xlsx\""
               }
             ]
           }

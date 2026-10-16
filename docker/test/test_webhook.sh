@@ -31,7 +31,7 @@ FAIL="\033[0;31m[FAIL]\033[0m"
 INFO="\033[0;36m[INFO]\033[0m"
 
 echo "============================================================"
-echo "  Demo-Logi RAG  ─  Webhook end-to-end test suite"
+echo "  NexusLogi RAG  ─  Webhook end-to-end test suite"
 echo "============================================================"
 echo "  Base URL              : ${BASE_URL}"
 echo "  Intent Dispatcher path: /webhook/${INTENT_DISPATCHER_PATH}"
@@ -77,7 +77,7 @@ echo -e "${INFO} Test 3/4: Workflow 1 (Intent Dispatcher) returns success JSON"
 PAYLOAD='{
   "intent": "request_expense_template",
   "user_id": "test_user_001",
-  "user_query": "経費精算のフォーマットちょうだい",
+  "user_query": "Send me the expense report template.",
   "metadata": { "template_key": "expense_template_v3" }
 }'
 RESP=$(curl -s -X POST "${BASE_URL}/webhook/${INTENT_DISPATCHER_PATH}" \

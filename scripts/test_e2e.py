@@ -30,6 +30,8 @@ from dify_console import REPO_ROOT, DifyConsole, connect, load_env
 
 STATE_FILE = REPO_ROOT / "scripts" / ".provision_state.json"
 API_KEY_NAME = "e2e-test"
+# Opening words of the system prompt's fixed refusal (§1-2).
+FALLBACK = "No explicit provision"
 
 PASS = "\033[0;32m[PASS]\033[0m"
 FAIL = "\033[0;31m[FAIL]\033[0m"
@@ -84,7 +86,7 @@ def main() -> int:
     api_key = get_api_key(console, app_id)
 
     print("=" * 72)
-    print("  Demo-Logi-Bot  —  end-to-end test (Dify Service API)")
+    print("  NexusLogi Bot  —  end-to-end test (Dify Service API)")
     print(f"  app_id: {app_id}")
     print("=" * 72)
     print()
@@ -92,14 +94,13 @@ def main() -> int:
     failures = 0
 
     # ── 1. Policy Q&A ──────────────────────────────────────────────────
-    # "How much is a late-night taxi home?"
-    print(f"{INFO} Test 1/3: policy Q&A — 「深夜帰りのタクシー代いくら？」")
-    answer = ask(base_url, api_key, "深夜帰りのタクシー代いくら？").get("answer", "")
+    print(f"{INFO} Test 1/3: policy Q&A — \"How much can I claim for a late-night ride home?\"")
+    answer = ask(base_url, api_key, "How much can I claim for a late-night ride home?").get("answer", "")
     checks = {
-        "quotes the cap verbatim (15,000円 = JPY 15,000)": "15,000円" in answer,
-        "cites the regulation number": "DL-HR-RG-2024-007" in answer,
-        "uses the 3-block format (【結論】 conclusion … 【引用元】 source)": "【結論】" in answer and "【引用元】" in answer,
-        "did not fall back to the deflection message (見当たりませんでした)": "見当たりませんでした" not in answer,
+        "quotes the cap verbatim (USD 100 per ride)": "USD 100 per ride" in answer,
+        "cites the regulation number": "NL-HR-RG-2024-007" in answer,
+        "uses the 3-block format (Answer … Source)": "Answer" in answer and "Source" in answer,
+        "did not fall back to the deflection message": FALLBACK not in answer,
     }
     for label, ok in checks.items():
         print(f"       {'✓' if ok else '✗'} {label}")
@@ -111,12 +112,12 @@ def main() -> int:
     print()
 
     # ── 2. Guardrail ───────────────────────────────────────────────────
-    # "Do I get an allowance for adopting a cat?" — the policy is silent.
-    print(f"{INFO} Test 2/3: guardrail — 「猫を飼ったら手当出る？」")
-    answer = ask(base_url, api_key, "猫を飼ったら手当出る？").get("answer", "")
+    # The policy is silent on pets.
+    print(f"{INFO} Test 2/3: guardrail — \"Do I get an allowance if I adopt a cat?\"")
+    answer = ask(base_url, api_key, "Do I get an allowance if I adopt a cat?").get("answer", "")
     checks = {
-        "refuses instead of inventing (見当たりませんでした = not found)": "見当たりませんでした" in answer,
-        "names the responsible contact (Sato, General Affairs)": "佐藤" in answer,
+        "refuses instead of inventing": FALLBACK in answer,
+        "names the responsible team (People Operations)": "People Operations" in answer,
         "gives the extension (ext. 1234)": "1234" in answer,
     }
     for label, ok in checks.items():
@@ -129,14 +130,13 @@ def main() -> int:
     print()
 
     # ── 3. File request → n8n → download ───────────────────────────────
-    # "Send me the expense report format."
-    print(f"{INFO} Test 3/3: file request — 「経費精算のフォーマットちょうだい」")
-    answer = ask(base_url, api_key, "経費精算のフォーマットちょうだい").get("answer", "")
+    print(f"{INFO} Test 3/3: file request — \"Send me the expense report template.\"")
+    answer = ask(base_url, api_key, "Send me the expense report template.").get("answer", "")
     download_url = "http://localhost:5678/webhook/files/expense-v3"
     checks = {
-        "routed to the n8n branch (filename returned)": "経費精算テンプレート_v3.xlsx" in answer,
+        "routed to the n8n branch (filename returned)": "expense_template_v3.xlsx" in answer,
         "returned the localhost download URL": download_url in answer,
-        "included the deadline from n8n (the 25th)": "25日" in answer,
+        "included the deadline from n8n (the 25th)": "25th" in answer,
     }
     for label, ok in checks.items():
         print(f"       {'✓' if ok else '✗'} {label}")
